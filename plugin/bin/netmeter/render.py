@@ -1,12 +1,14 @@
 """Statusline render: read state, print one line."""
 
 from __future__ import annotations
-import datetime, json, os, sys
+import datetime, json, os, shutil, sys
 from pathlib import Path
 from .formatter import bytes_to_human
 from .state import read_state
 
 DEFAULT_STALE_SEC = 10
+DEFAULT_ALIGN = "right"
+FALLBACK_WIDTH = 120
 
 def state_dir() -> Path:
     return Path(os.environ.get(
@@ -36,6 +38,33 @@ def format_line(b_in: int, b_out: int, mode: str) -> str:
         return f"net: {bytes_to_human(b_in + b_out)} (↓{h_in} ↑{h_out})"
     return f"↓ {h_in}  ↑ {h_out}"
 
+def terminal_width(payload: dict) -> int:
+    """Best-effort terminal column count: payload hint → env → shutil → fallback."""
+    for key in ("terminal_width", "cols", "columns", "width"):
+        v = payload.get(key)
+        if isinstance(v, int) and v > 0:
+            return v
+    env_cols = os.environ.get("COLUMNS")
+    if env_cols and env_cols.isdigit():
+        return int(env_cols)
+    try:
+        size = shutil.get_terminal_size((FALLBACK_WIDTH, 24))
+        if size.columns > 0:
+            return size.columns
+    except OSError:
+        pass
+    return FALLBACK_WIDTH
+
+def align_line(line: str, mode: str, width: int) -> str:
+    """Pad `line` left or center; right-padding adds nothing useful for a statusline."""
+    visible = len(line)
+    pad = max(0, width - visible)
+    if mode == "right":
+        return " " * pad + line
+    if mode == "center":
+        return " " * (pad // 2) + line
+    return line
+
 def main() -> int:
     try:
         payload = json.load(sys.stdin)
@@ -60,6 +89,9 @@ def main() -> int:
     line = format_line(state.bytes_in, state.bytes_out, mode)
     if is_stale(state.updated_at, threshold):
         line = line + " ⚠"
+    align = os.environ.get("NETMETER_ALIGN", DEFAULT_ALIGN)
+    if align in ("right", "center"):
+        line = align_line(line, align, terminal_width(payload))
     print(line)
     return 0
 

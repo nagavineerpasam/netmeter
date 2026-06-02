@@ -97,3 +97,48 @@ def test_invalid_threshold_env_falls_back(tmp_path):
                         env_overrides={"NETMETER_STALE_THRESHOLD_SEC": "foo"})
     assert rc == 0
     assert "1 KB" in out and "512 B" in out
+
+
+def _make_state(tmp_path, b_in, b_out):
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": b_in, "bytes_out": b_out,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+    }))
+
+def test_right_align_pads_to_terminal_width(tmp_path):
+    _make_state(tmp_path, 1024, 512)
+    out, rc = run_render(tmp_path,
+                        json.dumps({"session_id": "abc", "terminal_width": 80}),
+                        env_overrides={"NETMETER_ALIGN": "right"})
+    assert rc == 0
+    # raw stdout (not .strip()) — but we used .strip() in run_render.
+    # Re-run with capture to inspect padding directly:
+    env = {**os.environ, "NETMETER_STATE_DIR": str(tmp_path), "NETMETER_ALIGN": "right"}
+    p = subprocess.run([str(ENTRY)],
+                       input=json.dumps({"session_id": "abc", "terminal_width": 80}),
+                       capture_output=True, text=True, env=env, timeout=5)
+    raw = p.stdout.rstrip("\n")
+    assert raw.endswith("↓ 1 KB  ↑ 512 B"), f"got: {raw!r}"
+    assert raw.startswith("   "), f"expected leading spaces, got: {raw!r}"
+    assert len(raw) == 80, f"expected width 80, got {len(raw)}: {raw!r}"
+
+def test_left_align_explicit_no_padding(tmp_path):
+    _make_state(tmp_path, 1024, 512)
+    env = {**os.environ, "NETMETER_STATE_DIR": str(tmp_path), "NETMETER_ALIGN": "left"}
+    p = subprocess.run([str(ENTRY)],
+                       input=json.dumps({"session_id": "abc", "terminal_width": 80}),
+                       capture_output=True, text=True, env=env, timeout=5)
+    raw = p.stdout.rstrip("\n")
+    assert raw == "↓ 1 KB  ↑ 512 B", f"got: {raw!r}"
+
+def test_center_align(tmp_path):
+    _make_state(tmp_path, 1024, 512)
+    env = {**os.environ, "NETMETER_STATE_DIR": str(tmp_path), "NETMETER_ALIGN": "center"}
+    p = subprocess.run([str(ENTRY)],
+                       input=json.dumps({"session_id": "abc", "terminal_width": 60}),
+                       capture_output=True, text=True, env=env, timeout=5)
+    raw = p.stdout.rstrip("\n")
+    visible = "↓ 1 KB  ↑ 512 B"
+    expected_pad = (60 - len(visible)) // 2
+    assert raw == " " * expected_pad + visible, f"got: {raw!r}"
