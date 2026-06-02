@@ -1,0 +1,9 @@
+[project]
+name = "netmeter"
+version = "0.1.0"
+description = "Per-session network usage in the Claude Code statusline"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["plugin/bin"]
