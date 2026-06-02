@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# netmeter-teardown: restore ~/.claude/settings.json from the most recent
+# backup created by netmeter-setup.
+#
+# Usage:
+#   netmeter-teardown            restore the most recent backup
+#   netmeter-teardown --list     list available backups, do nothing
+#   netmeter-teardown --help     show this help
+
+set -uo pipefail
+
+LIST=0
+for arg in "$@"; do
+  case "$arg" in
+    --list) LIST=1 ;;
+    --help|-h)
+      sed -n '2,/^$/p' "$0" | sed 's/^# //; s/^#//'
+      exit 0
+      ;;
+    *)
+      echo "netmeter-teardown: unknown argument: $arg" >&2
+      exit 2
+      ;;
+  esac
+done
+
+SETTINGS="$HOME/.claude/settings.json"
+shopt -s nullglob
+BACKUPS=("$SETTINGS".bak.netmeter-*)
+shopt -u nullglob
+
+if [ "${#BACKUPS[@]}" -eq 0 ]; then
+  echo "netmeter-teardown: no netmeter backups found."
+  echo "  Looked for: $SETTINGS.bak.netmeter-*"
+  echo "  Either netmeter-setup was never run, or the backups were deleted."
+  exit 1
+fi
+
+# Sort newest-first by name (timestamp suffix sorts lexically).
+IFS=$'\n' SORTED=($(printf '%s\n' "${BACKUPS[@]}" | sort -r))
+unset IFS
+
+if [ "$LIST" = "1" ]; then
+  echo "Available netmeter backups (newest first):"
+  for b in "${SORTED[@]}"; do
+    echo "  $b"
+  done
+  exit 0
+fi
+
+LATEST="${SORTED[0]}"
+PRETEARDOWN="$SETTINGS.bak.before-teardown-$(date +%Y%m%d-%H%M%S)"
+
+echo "netmeter-teardown: restoring settings.json"
+echo
+echo "  From backup: $LATEST"
+echo "  Current settings saved to: $PRETEARDOWN"
+echo
+
+if [ -f "$SETTINGS" ]; then
+  cp "$SETTINGS" "$PRETEARDOWN" || {
+    echo "netmeter-teardown: failed to save current settings" >&2
+    exit 3
+  }
+fi
+cp "$LATEST" "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS" || {
+  echo "netmeter-teardown: failed to restore from backup" >&2
+  exit 4
+}
+
+echo "netmeter-teardown: done."
+echo "Restart Claude Code for the change to take effect."
+echo
+echo "Want to redo netmeter? Restore your current state first:"
+echo "  cp $PRETEARDOWN $SETTINGS"
