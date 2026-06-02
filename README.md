@@ -13,34 +13,48 @@ start of every session, so you always see *this session's* usage.
 
 ---
 
-## Install (one minute)
+## Install (about a minute)
 
-In any Claude Code window, run these two commands:
+There are three small steps. The first two run inside Claude Code; the third
+is a one-time edit to your user settings.
+
+### Step 1 — install the plugin
+
+In any Claude Code window:
 
 ```
 /plugin marketplace add nagavineerpasam/netmeter
 /plugin install netmeter@toolbelt
 ```
 
-Exit Claude Code (`/exit`) and reopen it. The statusline should show
-`0 B used` within ~1 second of the new session starting.
+Claude Code will fetch the plugin from GitHub and register it.
 
-If the statusline doesn't appear, paste this block into your
-`~/.claude/settings.json` (merge with any existing keys; don't overwrite the
-whole file):
+### Step 2 — enable the statusline (required, one-time)
+
+Claude Code does not yet auto-load `statusLine` from plugin defaults, so add
+the block below to your **`~/.claude/settings.json`** by hand. Merge it in —
+don't overwrite the file.
 
 ```json
 {
   "statusLine": {
     "type": "command",
-    "command": "${CLAUDE_PLUGIN_ROOT}/statusline.sh",
+    "command": "~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/statusline.sh",
     "padding": 0,
     "refreshInterval": 5
   }
 }
 ```
 
-Then restart Claude Code one more time.
+> If `~` isn't expanded by Claude Code on your system and you see nothing
+> after restart, replace `~` with your absolute home path
+> (e.g. `/Users/yourname/.claude/...`).
+
+### Step 3 — restart Claude Code
+
+`/exit` and reopen `claude`. Within a second of the new session loading,
+you should see `0 B used` on the statusline. As you use Claude, it will
+climb to `42 MB used`, etc.
 
 ---
 
