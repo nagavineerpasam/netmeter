@@ -1,6 +1,6 @@
 {
-  "name": "nagavineerpasam",
-  "description": "Plugin marketplace by nagavineerpasam",
+  "name": "toolbelt",
+  "description": "A collection of small, focused Claude Code plugins",
   "owner": {
     "name": "nagavineerpasam",
     "url": "https://github.com/nagavineerpasam/netmeter"
