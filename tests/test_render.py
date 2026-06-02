@@ -85,3 +85,15 @@ def test_invalid_stdin_silent(tmp_path):
     out, rc = run_render(tmp_path, "not json")
     assert rc == 0
     assert out == ""
+
+def test_invalid_threshold_env_falls_back(tmp_path):
+    """NETMETER_STALE_THRESHOLD_SEC=foo must not crash the render."""
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": 1024, "bytes_out": 512,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+    }))
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_STALE_THRESHOLD_SEC": "foo"})
+    assert rc == 0
+    assert "1 KB" in out and "512 B" in out

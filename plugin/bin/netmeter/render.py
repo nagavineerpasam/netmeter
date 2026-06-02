@@ -52,7 +52,10 @@ def main() -> int:
         print(f"netmeter: {state.error}")
         return 0
 
-    threshold = int(os.environ.get("NETMETER_STALE_THRESHOLD_SEC", DEFAULT_STALE_SEC))
+    try:
+        threshold = int(os.environ.get("NETMETER_STALE_THRESHOLD_SEC", DEFAULT_STALE_SEC))
+    except ValueError:
+        threshold = DEFAULT_STALE_SEC
     mode = os.environ.get("NETMETER_FORMAT", "compact")
     line = format_line(state.bytes_in, state.bytes_out, mode)
     if is_stale(state.updated_at, threshold):
