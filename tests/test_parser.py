@@ -52,3 +52,31 @@ def test_synthetic_sample():
     second = next(r for r in samples[1].rows if r.pid == 12345)
     assert second.bytes_in == 0
     assert second.bytes_out == 256
+
+
+def test_unknown_unit_skips_row():
+    """A row with an unrecognised unit should be silently skipped, not zeroed."""
+    raw = (
+        "time      bytes_in   bytes_out\n"
+        "00:00:00 procA.1   10 KiB   5 KiB\n"
+        "00:00:00 procB.2   42 PiB   1 PiB\n"
+        "00:00:00 procC.3   3 MiB    0 B\n"
+    )
+    samples = list(parse_samples(raw))
+    assert len(samples) == 1
+    pids = {r.pid for r in samples[0].rows}
+    assert pids == {1, 3}, f"procB (unknown unit) should be skipped; got pids={pids}"
+
+
+def test_known_units_convert_correctly():
+    raw = (
+        "time bytes_in bytes_out\n"
+        "00:00 a.1   1 KiB   2 MiB\n"
+        "00:00 b.2   1 GiB   0 B\n"
+    )
+    samples = list(parse_samples(raw))
+    rows = {r.pid: r for r in samples[0].rows}
+    assert rows[1].bytes_in == 1024
+    assert rows[1].bytes_out == 2 * 1024 ** 2
+    assert rows[2].bytes_in == 1024 ** 3
+    assert rows[2].bytes_out == 0

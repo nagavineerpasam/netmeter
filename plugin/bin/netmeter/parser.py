@@ -40,8 +40,14 @@ _UNIT_MULT: dict[str, int] = {
 
 
 def _to_bytes(value: str, unit: str) -> int:
-    """Convert a human-readable size token pair to an integer byte count."""
-    mult = _UNIT_MULT.get(unit, 1)
+    """Convert a human-readable size token pair to an integer byte count.
+
+    Raises ValueError on unknown unit so the caller can skip the row
+    instead of silently recording the wrong byte count.
+    """
+    mult = _UNIT_MULT.get(unit)
+    if mult is None:
+        raise ValueError(f"unknown nettop unit: {unit!r}")
     try:
         # value may be a float string like '1.5' for large units
         return int(float(value) * mult)
