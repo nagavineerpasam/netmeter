@@ -1,110 +1,177 @@
 # netmeter
 
-Per-session network usage in the Claude Code statusline.
+**See how much internet data your Claude Code session is using — right in the statusline.**
 
 ```
-↓ 12.3 MB  ↑ 4.1 MB
+                                                                       16.4 MB used
 ```
 
-Counts bytes sent and received by the `claude` process and all its descendants — WebFetch, Bash-spawned `curl`, MCP servers, package downloads. The counter resets at every new session.
+netmeter is a Claude Code plugin (macOS). It counts every byte the `claude`
+process and its children send and receive — API calls, WebFetch, Bash-spawned
+`curl`, MCP servers, `git push`, package downloads. The counter resets at the
+start of every session, so you always see *this session's* usage.
 
-## Install
+---
 
-Currently macOS only.
+## Install (one minute)
 
-1. Clone the repo:
-   ```
-   git clone https://github.com/nagavineerpasam/netmeter ~/projects/netmeter
-   ```
+In any Claude Code window, run these two commands:
 
-2. Install the plugin (one of the following):
+```
+/plugin marketplace add nagavineerpasam/netmeter
+/plugin install netmeter@toolbelt
+```
 
-   **Option A — symlink (development):**
-   ```
-   mkdir -p ~/.claude/plugins
-   ln -s ~/projects/netmeter/plugin ~/.claude/plugins/netmeter
-   ```
+Exit Claude Code (`/exit`) and reopen it. The statusline should show
+`0 B used` within ~1 second of the new session starting.
 
-   **Option B — copy (release):**
-   ```
-   mkdir -p ~/.claude/plugins
-   cp -R ~/projects/netmeter/plugin ~/.claude/plugins/netmeter
-   ```
+If the statusline doesn't appear, paste this block into your
+`~/.claude/settings.json` (merge with any existing keys; don't overwrite the
+whole file):
 
-3. Enable the statusline. The plugin tries to register a default `statusLine` automatically via `plugin/settings.json`. If your Claude Code version does not yet pick that up from plugin settings, add this block to your user settings at `~/.claude/settings.json`:
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "${CLAUDE_PLUGIN_ROOT}/statusline.sh",
+    "padding": 0,
+    "refreshInterval": 5
+  }
+}
+```
 
-   ```json
-   {
-     "statusLine": {
-       "type": "command",
-       "command": "~/.claude/plugins/netmeter/statusline.sh",
-       "padding": 0,
-       "refreshInterval": 5
-     }
-   }
-   ```
+Then restart Claude Code one more time.
 
-4. Restart Claude Code. The statusline should show `↓ 0 B  ↑ 0 B` within ~1 second of starting a new session.
+---
 
-## Requirements
+## What you'll see
 
-- macOS (uses `nettop` — preinstalled).
-- Python 3.9+ (preinstalled on macOS).
-- Optional: `jq` (the hook falls back to `python3` if missing).
+Default format — a single, friendly total:
 
-No sudo required. No external dependencies.
+```
+                                                          16.4 MB used
+```
+
+Other formats are available via the `NETMETER_FORMAT` environment variable
+(set under `statusLine.env` in your settings):
+
+| `NETMETER_FORMAT` | Looks like |
+|---|---|
+| `compact` *(default)* | `16.4 MB used` |
+| `total` | `16.4 MB` |
+| `split` | `↓ 12.3 MB  ↑ 4.1 MB` |
+| `verbose` | `net: 16.4 MB (↓12.3 MB ↑4.1 MB)` |
+
+> Note: in long Claude Code sessions, **upload usually exceeds download**.
+> That's normal — the Claude API is stateless, so every turn re-sends the
+> full conversation history. The single-total default avoids that confusion.
+
+---
 
 ## Configuration
 
-Environment variables, all optional:
+All optional. Set under `statusLine.env` in `~/.claude/settings.json`.
 
-| Variable | Default | Description |
+| Variable | Default | Effect |
 |---|---|---|
-| `NETMETER_FORMAT` | `compact` | One of `compact`, `total`, `verbose` |
-| `NETMETER_STALE_THRESHOLD_SEC` | `10` | Show a stale-marker if the state file is older than this |
-| `NETMETER_STATE_DIR` | `~/.claude/plugins/data/netmeter` | Where the daemon writes per-session JSON |
-| `NETMETER_NETTOP_BIN` | `nettop` | Override the nettop binary (for testing) |
+| `NETMETER_FORMAT` | `compact` | `compact` / `total` / `split` / `verbose` |
+| `NETMETER_ALIGN` | `right` | `right` / `center` / `left` |
+| `NETMETER_STALE_THRESHOLD_SEC` | `10` | Append `⚠` if state is older than this |
 
-Format examples:
-- `compact` (default): `↓ 12.3 MB  ↑ 4.1 MB`
-- `total`: `16.4 MB`
-- `verbose`: `net: 16.4 MB (↓12.3 MB ↑4.1 MB)`
+Example block in `~/.claude/settings.json`:
 
-## How it works
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "${CLAUDE_PLUGIN_ROOT}/statusline.sh",
+    "padding": 0,
+    "refreshInterval": 5,
+    "env": {
+      "NETMETER_FORMAT": "total",
+      "NETMETER_ALIGN": "right"
+    }
+  }
+}
+```
 
-- `SessionStart` hook spawns a small Python daemon scoped to one Claude Code session.
-- The daemon streams `nettop -P -d` and accumulates byte deltas for the PIDs in the claude process tree (root + all descendants), refreshed every 2 seconds.
-- It writes a JSON state file at `~/.claude/plugins/data/netmeter/<session_id>.json` atomically every ~1 second.
-- The statusline command reads that file each render (a single file read; no `nettop` shell-out per render).
-- The daemon self-terminates when the claude PID disappears.
+---
+
+## Try it
+
+After installing, ask Claude to do something networky:
+
+> Download 30 MB with `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
+
+Watch the number climb from `0 B used` to roughly `28 MB used` over ~10 seconds.
+
+---
 
 ## Uninstall
 
 ```
-rm ~/.claude/plugins/netmeter
-rm -rf ~/.claude/plugins/data/netmeter  # optional: removes per-session state and logs
+/plugin uninstall netmeter@toolbelt
+/plugin marketplace remove toolbelt
 ```
 
-If you added a `statusLine` block to your user settings, remove it.
+If you added the `statusLine` block manually, remove it from
+`~/.claude/settings.json`. Optional cleanup:
+
+```
+rm -rf ~/.claude/plugins/data/netmeter
+```
+
+---
+
+## How it works
+
+- `SessionStart` hook spawns a small Python daemon scoped to the current
+  Claude Code session.
+- The daemon streams `nettop -P -d` and accumulates byte deltas for every
+  PID in the claude process tree (refreshed every 2 s).
+- It writes a per-session JSON state file at
+  `~/.claude/plugins/data/netmeter/<session_id>.json` atomically every second.
+- The statusline command just reads that file each render — no `nettop`
+  shell-out per render, so it's fast (~40 ms).
+- The daemon self-terminates when the claude PID disappears.
+
+No sudo. No external services. No telemetry.
+
+---
+
+## Requirements
+
+- macOS (uses the preinstalled `nettop` tool).
+- Python 3.9+ (preinstalled on macOS).
+- `jq` is optional; the hook falls back to `python3` if it's missing.
+
+---
 
 ## Limitations
 
-- macOS only in v1.
-- Counts kernel-attributed bytes per process; not strictly equal to TLS-wire bytes.
-- Per session only; no daily/lifetime/destination rollups yet.
+- **macOS only** in v1. Linux and Windows support are possible (see issues).
+- Counts **kernel-attributed** bytes per process. Very close to wire bytes
+  but includes TLS overhead and may miss sub-second network blips that
+  `nettop`'s 1-second sample window cannot resolve.
+- **Per session only** — no daily/lifetime totals or per-host breakdowns
+  in v1.
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+---
 
 ## Development
 
 ```
+git clone https://github.com/nagavineerpasam/netmeter
+cd netmeter
 python3 -m venv .venv
 .venv/bin/pip install pytest
 .venv/bin/pytest
 ```
 
-Design and plan documents:
-- `docs/superpowers/specs/2026-06-03-netmeter-design.md`
-- `docs/superpowers/plans/2026-06-03-netmeter.md`
-
-## License
-
-TBD by the repository owner.
+Design and plan documents live under `docs/superpowers/`.
