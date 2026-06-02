@@ -32,11 +32,14 @@ def is_stale(updated_at: str, threshold_sec: int) -> bool:
 def format_line(b_in: int, b_out: int, mode: str) -> str:
     h_in = bytes_to_human(b_in)
     h_out = bytes_to_human(b_out)
+    total = bytes_to_human(b_in + b_out)
     if mode == "total":
-        return bytes_to_human(b_in + b_out)
+        return total
+    if mode == "split":
+        return f"↓ {h_in}  ↑ {h_out}"
     if mode == "verbose":
-        return f"net: {bytes_to_human(b_in + b_out)} (↓{h_in} ↑{h_out})"
-    return f"↓ {h_in}  ↑ {h_out}"
+        return f"net: {total} (↓{h_in} ↑{h_out})"
+    return f"{total} used"
 
 def terminal_width(payload: dict) -> int:
     """Best-effort terminal column count: payload hint → env → shutil → fallback."""
