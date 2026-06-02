@@ -1,0 +1,22 @@
+{
+  "name": "netmeter",
+  "version": "0.1.0",
+  "description": "Per-session network usage in the Claude Code statusline",
+  "author": {
+    "name": "nagavineerpasam",
+    "url": "https://github.com/nagavineerpasam/netmeter"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/session-start.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
