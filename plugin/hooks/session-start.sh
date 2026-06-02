@@ -10,7 +10,7 @@ PAYLOAD="$(cat)"
 
 # Extract session_id. Prefer jq, fall back to python3.
 if command -v jq >/dev/null 2>&1; then
-    SESSION_ID="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // empty')"
+    SESSION_ID="$(printf '%s' "$PAYLOAD" | jq -r '.session_id // empty' 2>/dev/null)"
 else
     SESSION_ID="$(printf '%s' "$PAYLOAD" | python3 -c \
         'import json,sys; print(json.load(sys.stdin).get("session_id",""))' 2>/dev/null)"
