@@ -31,6 +31,6 @@ def read_state(path: Path) -> Optional[State]:
     try:
         with open(path) as f:
             data = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+        return State(**data)
+    except (FileNotFoundError, json.JSONDecodeError, TypeError):
         return None
-    return State(**data)

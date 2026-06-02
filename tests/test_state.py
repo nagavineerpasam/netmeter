@@ -38,3 +38,8 @@ def test_error_field_round_trips(tmp_path):
     write_state(p, s)
     got = read_state(p)
     assert got.error == "nettop unavailable"
+
+def test_read_wrong_shape_returns_none(tmp_path):
+    p = tmp_path / "wrong.json"
+    p.write_text('{"only_key": "value"}')
+    assert read_state(p) is None
