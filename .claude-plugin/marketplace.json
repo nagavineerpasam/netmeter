@@ -1,0 +1,20 @@
+{
+  "name": "netmeter",
+  "description": "Per-session network usage in the Claude Code statusline",
+  "owner": {
+    "name": "nagavineerpasam",
+    "url": "https://github.com/nagavineerpasam/netmeter"
+  },
+  "plugins": [
+    {
+      "name": "netmeter",
+      "description": "Per-session network usage in the Claude Code statusline (macOS)",
+      "version": "0.1.0",
+      "source": "./plugin",
+      "author": {
+        "name": "nagavineerpasam",
+        "url": "https://github.com/nagavineerpasam/netmeter"
+      }
+    }
+  ]
+}
