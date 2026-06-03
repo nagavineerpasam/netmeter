@@ -111,6 +111,11 @@ All optional. Set under `statusLine.env` in `~/.claude/settings.json`.
 | `NETMETER_ALIGN` | `right` | `right` / `center` / `left` |
 | `NETMETER_COLOR` | `1` | Set to `0` to disable ANSI styling |
 | `NETMETER_STALE_THRESHOLD_SEC` | `10` | Append `⚠` if state is older than this |
+| `NETMETER_MASCOT` | `0` | Set to `1` to append a tier emoji (🐌 → 🐢 → 🐇 → 🚀 → 🚀🚀) based on current Mbps |
+
+With `NETMETER_MASCOT=1` the statusline ends with an animal-kingdom speed tier:
+🐌 under 0.1 Mbps, 🐢 under 1, 🐇 under 10, 🚀 under 50, 🚀🚀 at 50+ Mbps.
+Pure cosmetic; opt-in.
 
 Example block:
 
