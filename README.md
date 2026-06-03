@@ -3,7 +3,7 @@
 **See how much internet data your Claude Code session is using — right in the statusline.**
 
 ```
-Opus 4.7  [████████░░░░░░░░░░░░] 42% used                              net  16.4 MB used
+Opus 4.7  [████████░░░░░░░░░░░░] 42% used                              net  16.4 MB used  │  4.2 Mbps
 ```
 
 netmeter is a Claude Code plugin (macOS). It counts every byte the `claude`
@@ -75,7 +75,7 @@ rm -rf ~/.claude/plugins/data/netmeter # session state + logs
 Default format — a single, friendly total with subtle colour for size:
 
 ```
-net  16.4 MB used
+net  16.4 MB used  │  4.2 Mbps
 ```
 
 - `net` in cyan (matches the colour of model labels in Claude Code).
@@ -88,10 +88,15 @@ Other formats via `NETMETER_FORMAT` (set under `statusLine.env` in
 
 | `NETMETER_FORMAT` | Looks like |
 |---|---|
-| `compact` *(default)* | `net  16.4 MB used` |
-| `total` | `16.4 MB` |
-| `split` | `↓ 12.3 MB  ↑ 4.1 MB` |
-| `verbose` | `net: 16.4 MB (↓12.3 MB ↑4.1 MB)` |
+| `compact` *(default)* | `net  16.4 MB used  │  4.2 Mbps` |
+| `total` | `16.4 MB  │  4.2 Mbps` |
+| `split` | `↓ 12.3 MB  ↑ 4.1 MB  │  4.2 Mbps` |
+| `verbose` | `net: 16.4 MB (↓12.3 MB ↑4.1 MB, 4.2 Mbps)` |
+
+The number after the vertical bar is the **current activity rate** — how
+fast *this Claude Code session* is moving data right now, measured by a
+3-second rolling window inside the daemon. It is not your ISP's link
+capacity, and it does not run a speed test. Idle sessions show `0.0 Mbps`.
 
 > Note: in long Claude Code sessions, **upload usually exceeds download**.
 > That's normal — the Claude API is stateless, so every turn re-sends the
@@ -147,7 +152,7 @@ Ask Claude to download something:
 
 > Run: `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
 
-Watch `net  0 B used` climb to roughly `net  28 MB used` over ~10 seconds. Past
+Watch `net  0 B used` climb to roughly `net  28 MB used  │  3.0 Mbps` over ~10 seconds. Past
 50 MB the value turns yellow; past 500 MB it turns red.
 
 ---
