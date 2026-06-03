@@ -1,6 +1,7 @@
 import json, os, subprocess, sys, time, signal
 from pathlib import Path
 import pytest
+from netmeter.daemon import _compute_rate
 
 @pytest.fixture
 def fake_nettop(tmp_path):
@@ -122,3 +123,27 @@ def test_daemon_writes_error_when_nettop_missing(tmp_path):
     )
     data = json.loads(state_file.read_text())
     assert data.get("error") == "nettop unavailable"
+
+
+def test_compute_rate_empty():
+    assert _compute_rate([]) == 0.0
+
+
+def test_compute_rate_single_sample():
+    assert _compute_rate([(0.0, 1000)]) == 0.0
+
+
+def test_compute_rate_two_samples():
+    # 2000 bytes over 1.0 second → 2000 bytes/sec
+    assert _compute_rate([(0.0, 0), (1.0, 2000)]) == 2000.0
+
+
+def test_compute_rate_uses_first_and_last_only():
+    # Spans 3 seconds, total grew by 6000 bytes → 2000 bytes/sec
+    assert _compute_rate([(0.0, 0), (1.0, 999), (2.0, 4321), (3.0, 6000)]) == 2000.0
+
+
+def test_compute_rate_handles_zero_dt():
+    # Same timestamp on both ends: don't divide by zero.
+    rate = _compute_rate([(5.0, 100), (5.0, 200)])
+    assert rate >= 0  # Doesn't crash; value is implementation-defined but finite.

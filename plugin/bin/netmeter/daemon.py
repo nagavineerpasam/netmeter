@@ -10,6 +10,20 @@ from .proctree import descendants, is_alive
 PROC_REFRESH_SEC = 2.0
 LIVENESS_CHECK_SEC = 2.0
 
+def _compute_rate(samples) -> float:
+    """Bytes-per-second over the span of the samples.
+
+    `samples` is a sequence of (monotonic_time, total_bytes_so_far). Uses
+    only the first and last entries; intermediate samples don't matter
+    because the underlying counter is monotonic.
+    """
+    if len(samples) < 2:
+        return 0.0
+    oldest_t, oldest_b = samples[0]
+    newest_t, newest_b = samples[-1]
+    dt = max(newest_t - oldest_t, 1e-3)
+    return (newest_b - oldest_b) / dt
+
 def now_iso() -> str:
     return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
