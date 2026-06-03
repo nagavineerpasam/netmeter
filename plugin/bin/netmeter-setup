@@ -136,17 +136,9 @@ EOF
       echo
       echo "     after netmeter-setup:"
       cat <<EOF
-       {
-         "statusLine": {
-           "type": "command",
-           "command": "$STATUSLINE_CMD",
-           "padding": 0,
-           "refreshInterval": 5,
-           "env": {
-             "NETMETER_COMPOSE_WITH": "$CURRENT_CMD"
-           }
-         }
-       }
+       statusLine.command  =  $STATUSLINE_CMD
+       compose-with file   =  $HOME/.claude/plugins/data/netmeter/compose_with
+                              (contains: $CURRENT_CMD)
 EOF
       echo
       echo "  (Pass --replace if you'd rather throw away the existing statusline.)"
@@ -183,12 +175,25 @@ else
 fi
 
 # 7. Apply atomically.
+#    - settings.json: replace statusLine.command with netmeter's wrapper.
+#    - data/netmeter/compose_with: write the previous command for the
+#      wrapper to invoke. (statusLine.env is not honoured by Claude Code,
+#      so we use a file instead. The file path is stable across plugin
+#      updates because it lives in the data dir, not the cache dir.)
+COMPOSE_DIR="$HOME/.claude/plugins/data/netmeter"
+COMPOSE_FILE="$COMPOSE_DIR/compose_with"
+mkdir -p "$COMPOSE_DIR"
+
+if [ "$ACTION" = "compose" ] && [ -n "$CURRENT_CMD" ]; then
+  printf '%s\n' "$CURRENT_CMD" > "$COMPOSE_FILE.tmp" && mv "$COMPOSE_FILE.tmp" "$COMPOSE_FILE"
+else
+  rm -f "$COMPOSE_FILE"
+fi
+
 ACTION="$ACTION" CURRENT_CMD="$CURRENT_CMD" STATUSLINE_CMD="$STATUSLINE_CMD" \
 SETTINGS="$SETTINGS" python3 - <<'PYEOF' || { echo "netmeter-setup: failed to update settings" >&2; exit 5; }
 import json, os
 path = os.environ["SETTINGS"]
-action = os.environ["ACTION"]
-current_cmd = os.environ.get("CURRENT_CMD", "")
 new_cmd = os.environ["STATUSLINE_CMD"]
 
 try:
@@ -204,12 +209,9 @@ new_block = {
     "padding": existing.get("padding", 0),
     "refreshInterval": existing.get("refreshInterval", 5),
 }
-
-env = dict(existing.get("env", {}))
-if action == "compose" and current_cmd:
-    env["NETMETER_COMPOSE_WITH"] = current_cmd
-elif action != "compose":
-    env.pop("NETMETER_COMPOSE_WITH", None)
+# Preserve any non-NETMETER env the user had (e.g. NETMETER_FORMAT).
+env = {k: v for k, v in existing.get("env", {}).items()
+       if k != "NETMETER_COMPOSE_WITH"}
 if env:
     new_block["env"] = env
 

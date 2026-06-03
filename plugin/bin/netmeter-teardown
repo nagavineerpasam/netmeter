@@ -68,6 +68,11 @@ cp "$LATEST" "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS" || {
   exit 4
 }
 
+# Clean up the compose-with file if /netmeter-setup left one. Harmless if
+# nobody composed, since the file just wouldn't exist.
+COMPOSE_FILE="$HOME/.claude/plugins/data/netmeter/compose_with"
+[ -f "$COMPOSE_FILE" ] && rm -f "$COMPOSE_FILE" && echo "  Removed:   $COMPOSE_FILE"
+
 echo "netmeter-teardown: done."
 echo "Restart Claude Code for the change to take effect."
 echo
