@@ -71,36 +71,60 @@ def _format_mbps(rate_bytes_per_sec: float) -> str:
     return f"{mbps:.1f} Mbps"
 
 
+# Mascot tier: speed-kingdom escalation when NETMETER_MASCOT=1.
+_MASCOT_TIERS = (
+    (0.1,        "🐌"),
+    (1.0,        "🐢"),
+    (10.0,       "🐇"),
+    (50.0,       "🚀"),
+    (float("inf"), "🚀🚀"),
+)
+
+def _mascot_for(mbps: float) -> str:
+    for upper, glyph in _MASCOT_TIERS:
+        if mbps < upper:
+            return glyph
+    return _MASCOT_TIERS[-1][1]
+
+def _mascot_enabled() -> bool:
+    return os.environ.get("NETMETER_MASCOT", "0") == "1"
+
+
 def format_line(b_in: int, b_out: int, mode: str, rate_bps: float = 0.0) -> str:
     h_in    = bytes_to_human(b_in)
     h_out   = bytes_to_human(b_out)
     h_total = bytes_to_human(b_in + b_out)
     mbps    = _format_mbps(rate_bps)
 
-    sep        = _wrap("│", DIM)
+    sep         = _wrap("│", DIM)
     rate_styled = _wrap(mbps, GREEN)
 
+    mascot_suffix = ""
+    if _mascot_enabled():
+        mbps_value = max(rate_bps, 0.0) * MBPS_BITS_PER_BYTE / MBPS_DIVISOR
+        mascot_suffix = "  " + _mascot_for(mbps_value)
+
     if mode == "total":
-        return f"{_wrap(h_total, _value_colour(b_in + b_out))}  {sep}  {rate_styled}"
+        return f"{_wrap(h_total, _value_colour(b_in + b_out))}  {sep}  {rate_styled}{mascot_suffix}"
 
     if mode == "split":
         return (
             f"{_wrap('↓', CYAN)} {_wrap(h_in,  _value_colour(b_in))}  "
             f"{_wrap('↑', CYAN)} {_wrap(h_out, _value_colour(b_out))}"
-            f"  {sep}  {rate_styled}"
+            f"  {sep}  {rate_styled}{mascot_suffix}"
         )
 
     if mode == "verbose":
         return (
             f"{_wrap('net:', CYAN)} {_wrap(h_total, _value_colour(b_in + b_out))} "
-            f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out}, {rate_styled})"
+            f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out}, {rate_styled}){mascot_suffix}"
         )
 
     # default 'compact'
     return (
         f"{_wrap('net', CYAN)}  "
         f"{_wrap(h_total, _value_colour(b_in + b_out))} "
-        f"{_wrap('used', DIM)}  {sep}  {rate_styled}"
+        f"{_wrap('used', DIM)}  {sep}  {rate_styled}{mascot_suffix}"
     )
 
 

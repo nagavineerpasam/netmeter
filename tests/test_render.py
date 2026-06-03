@@ -273,3 +273,93 @@ def test_color_off_strips_ansi_includes_mbps(tmp_path):
     assert rc == 0
     assert "\x1b[" not in out
     assert out == "net  1 KB used  │  4.2 Mbps"
+
+
+# --- mascot tier tests (opt-in via NETMETER_MASCOT=1) ---
+
+def _mascot_run(tmp_path, rate_bps, fmt="compact"):
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": 0, "bytes_out": 0,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+        "rate_bytes_per_sec": rate_bps,
+    }))
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_MASCOT": "1",
+                                       "NETMETER_FORMAT": fmt,
+                                       "NETMETER_ALIGN": "left"})
+    return out, rc
+
+def test_mascot_off_by_default(tmp_path):
+    """Without NETMETER_MASCOT=1, no emoji appears."""
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": 0, "bytes_out": 0,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+        "rate_bytes_per_sec": 1_000_000.0,  # 8 Mbps
+    }))
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_ALIGN": "left"})
+    assert rc == 0
+    # None of the tier glyphs should appear
+    for glyph in ("🐌", "🐢", "🐇", "🚀"):
+        assert glyph not in out, f"unexpected mascot {glyph} in default output: {out!r}"
+
+def test_mascot_snail_at_idle(tmp_path):
+    out, rc = _mascot_run(tmp_path, 0.0)
+    assert rc == 0
+    assert "🐌" in out
+    for glyph in ("🐢", "🐇", "🚀"):
+        assert glyph not in out
+
+def test_mascot_turtle_for_sub_mbps(tmp_path):
+    # 0.5 Mbps = 62500 bytes/sec
+    out, rc = _mascot_run(tmp_path, 62500.0)
+    assert rc == 0
+    assert "🐢" in out
+    for glyph in ("🐌", "🐇", "🚀"):
+        assert glyph not in out
+
+def test_mascot_rabbit_for_low_active(tmp_path):
+    # 4 Mbps = 500000 bytes/sec
+    out, rc = _mascot_run(tmp_path, 500000.0)
+    assert rc == 0
+    assert "🐇" in out
+    for glyph in ("🐌", "🐢", "🚀"):
+        assert glyph not in out
+
+def test_mascot_single_rocket_for_heavy(tmp_path):
+    # 24 Mbps = 3000000 bytes/sec
+    out, rc = _mascot_run(tmp_path, 3000000.0)
+    assert rc == 0
+    assert "🚀" in out
+    # exactly one rocket, not two
+    assert out.count("🚀") == 1
+
+def test_mascot_double_rocket_for_50plus(tmp_path):
+    # 60 Mbps = 7500000 bytes/sec
+    out, rc = _mascot_run(tmp_path, 7500000.0)
+    assert rc == 0
+    assert out.count("🚀") == 2
+
+def test_mascot_boundary_50mbps_is_double(tmp_path):
+    # exactly 50 Mbps = 6250000 bytes/sec — boundary, should be double rocket
+    out, rc = _mascot_run(tmp_path, 6250000.0)
+    assert rc == 0
+    assert out.count("🚀") == 2
+
+def test_mascot_appears_in_all_modes(tmp_path):
+    """All four format modes should accept the mascot."""
+    for fmt in ("compact", "total", "split", "verbose"):
+        out, rc = _mascot_run(tmp_path, 500000.0, fmt=fmt)  # 4 Mbps → 🐇
+        assert rc == 0, f"non-zero rc in mode {fmt}"
+        assert "🐇" in out, f"no rabbit in mode {fmt}: {out!r}"
+
+def test_mascot_verbose_emoji_after_closing_paren(tmp_path):
+    out, rc = _mascot_run(tmp_path, 500000.0, fmt="verbose")
+    assert rc == 0
+    # The rabbit comes after the ')' of the verbose paren block
+    paren_pos = out.rfind(")")
+    rabbit_pos = out.find("🐇")
+    assert paren_pos != -1 and rabbit_pos != -1
+    assert rabbit_pos > paren_pos
