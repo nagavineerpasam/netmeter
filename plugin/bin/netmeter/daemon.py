@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import argparse, datetime, os, shutil, signal, subprocess, sys, time
+from collections import deque
 from pathlib import Path
 from .state import State, write_state, read_state
 from .parser import parse_samples
@@ -81,6 +82,7 @@ def run(session_id: str, claude_pid: int) -> int:
     last_proc_refresh = time.monotonic()
     last_liveness = time.monotonic()
     buf: list[str] = []
+    rate_samples: deque = deque(maxlen=4)
 
     try:
         for line in nettop.stdout:
@@ -99,6 +101,8 @@ def run(session_id: str, claude_pid: int) -> int:
             if "bytes_in" in line and "bytes_out" in line and buf:
                 _accumulate(buf, pids, state)
                 state.updated_at = now_iso()
+                rate_samples.append((now, state.bytes_in + state.bytes_out))
+                state.rate_bytes_per_sec = _compute_rate(list(rate_samples))
                 write_state(state_path, state)
                 buf = []
             buf.append(line)
@@ -106,6 +110,8 @@ def run(session_id: str, claude_pid: int) -> int:
         if buf:
             _accumulate(buf, pids, state)
             state.updated_at = now_iso()
+            rate_samples.append((time.monotonic(), state.bytes_in + state.bytes_out))
+            state.rate_bytes_per_sec = _compute_rate(list(rate_samples))
             write_state(state_path, state)
     finally:
         try:

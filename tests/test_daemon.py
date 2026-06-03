@@ -147,3 +147,38 @@ def test_compute_rate_handles_zero_dt():
     # Same timestamp on both ends: don't divide by zero.
     rate = _compute_rate([(5.0, 100), (5.0, 200)])
     assert rate >= 0  # Doesn't crash; value is implementation-defined but finite.
+
+
+def test_daemon_writes_rate_after_multiple_samples(tmp_path, fake_nettop):
+    """The state file should carry a non-zero rate once two+ samples have flushed."""
+    state_dir = tmp_path / "state"
+    state_file = state_dir / "rate-session.json"
+    env = {**os.environ,
+           "NETMETER_STATE_DIR": str(state_dir),
+           "NETMETER_NETTOP_BIN": str(fake_nettop)}
+
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "netmeter.daemon",
+         "--session-id", "rate-session",
+         "--claude-pid", str(os.getpid())],
+        env=env,
+        cwd=str(Path(__file__).parent.parent / "plugin" / "bin"),
+    )
+    try:
+        deadline = time.monotonic() + 5
+        data = {}
+        while time.monotonic() < deadline:
+            if state_file.exists():
+                try:
+                    data = json.loads(state_file.read_text())
+                    if data.get("bytes_in", 0) >= 3000:
+                        break
+                except json.JSONDecodeError:
+                    pass
+            time.sleep(0.1)
+        assert "rate_bytes_per_sec" in data, f"got: {data}"
+        assert data["rate_bytes_per_sec"] > 0, f"expected nonzero rate, got: {data}"
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        try: proc.wait(timeout=3)
+        except subprocess.TimeoutExpired: proc.kill(); proc.wait()
