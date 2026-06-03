@@ -79,8 +79,7 @@ net  16.4 MB used  │  4.2 Mbps
 ```
 
 - `net` in cyan (matches the colour of model labels in Claude Code).
-- Value in your terminal's default colour up to 50 MB, **yellow** from 50 MB
-  to 500 MB, **red** above 500 MB.
+- Value in **green** (regardless of size).
 - `used` in dim gray.
 
 Other formats via `NETMETER_FORMAT` (set under `statusLine.env` in
@@ -152,8 +151,7 @@ Ask Claude to download something:
 
 > Run: `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
 
-Watch `net  0 B used` climb to roughly `net  28 MB used  │  3.0 Mbps` over ~10 seconds. Past
-50 MB the value turns yellow; past 500 MB it turns red.
+Watch `net  0 B used` climb to roughly `net  28 MB used  │  3.0 Mbps` over ~10 seconds.
 
 ---
 
