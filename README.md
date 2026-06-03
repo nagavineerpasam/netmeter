@@ -15,58 +15,59 @@ each new session, so you always see *this session's* usage.
 
 ## Install
 
-There are two steps: **install the plugin**, then **enable the statusline**.
-Pick whichever enable-method you prefer.
+Three commands inside Claude Code, plus one restart in the middle.
 
-### Step 1 — install the plugin (everyone does this)
-
-In any Claude Code window:
+### 1. Add the marketplace
 
 ```
 /plugin marketplace add nagavineerpasam/netmeter
+```
+
+### 2. Install the plugin
+
+```
 /plugin install netmeter@toolbelt
 ```
 
-Claude Code fetches the plugin from GitHub and registers it. The
-`SessionStart` hook (which spawns the network-measuring daemon) is now
-wired up.
+### 3. Restart Claude Code
 
-### Step 2 — enable the statusline
+`/exit`, then run `claude` again. This restart is **required**, because:
 
-The plugin runs the daemon successfully, but Claude Code does not yet
-auto-load a `statusLine` from plugins. You need to add a one-time block to
-your `~/.claude/settings.json`. Three options, easiest first:
+- New plugin slash commands (like `/netmeter-setup` below) only register at
+  session start ([upstream issue #37862](https://github.com/anthropics/claude-code/issues/37862)).
+- On first-install from a GitHub marketplace, the SessionStart hook can race
+  the async marketplace fetch and miss firing
+  ([upstream issue #10997](https://github.com/anthropics/claude-code/issues/10997)).
+  A restart guarantees the daemon starts cleanly.
 
-#### Option A — automatic, with safety checks (recommended)
+### 4. Configure the statusline
 
-After Step 1, in the same Claude Code window:
+After the restart, run **one** of these:
+
+#### Option A — automatic (recommended)
 
 ```
 /netmeter-setup --dry-run
 ```
 
-This prints exactly what will change — it writes nothing. Read it, then
-apply for real:
+This shows exactly what would change in `~/.claude/settings.json`, writes
+nothing. Then run:
 
 ```
 /netmeter-setup
 ```
 
-The command:
-- Looks up the actual install path of netmeter from Claude Code's plugin
-  registry (so it never goes stale across updates).
-- Writes a timestamped backup of your settings.json before changing it.
-- Refuses to overwrite an existing `statusLine` set by another plugin or by
-  you (unless you pass `--force`).
-- Is idempotent — running twice is a no-op the second time.
+It writes the `statusLine` block to your user settings (with a timestamped
+backup) and Claude Code auto-reloads — **no second restart needed**. Your
+next message shows `0 B used` on the statusline.
 
-Then `/exit` and reopen `claude`. The statusline shows `0 B used` within
-~1 second.
+The command refuses to overwrite an existing custom `statusLine` unless you
+pass `--force`. It's idempotent — running twice is a no-op the second time.
 
-#### Option B — manual (paste a block yourself)
+#### Option B — manual paste
 
-If you'd rather not run a script that touches your settings, open
-`~/.claude/settings.json` in your editor and merge in this block:
+If you'd rather not run a script, open `~/.claude/settings.json` and merge
+in this block:
 
 ```json
 {
@@ -79,71 +80,81 @@ If you'd rather not run a script that touches your settings, open
 }
 ```
 
-> Replace `~` with your absolute home path (e.g. `/Users/yourname/...`) if
-> Claude Code doesn't expand `~` on your system.
+Save the file. No restart needed — Claude Code reloads settings automatically
+([per the official docs](https://code.claude.com/docs/en/statusline)).
 
-Save the file, `/exit`, reopen `claude`.
+#### Option C — terminal script
 
-#### Option C — run the script directly from your terminal
-
-If you prefer not to use a slash command:
+If you'd rather run the script from your shell:
 
 ```
 bash ~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/bin/netmeter-setup --dry-run
 bash ~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/bin/netmeter-setup
 ```
 
-Same script as Option A, just invoked from your shell instead of from
-Claude Code.
+Same script as Option A, just invoked outside Claude Code.
 
 ---
 
-## Undo / recovery
+## Uninstall
 
-Whichever option you used, every change is recoverable.
+**Order matters.** Run these in sequence:
 
-### If you used Option A or C
+### 1. Restore your settings first
 
 ```
 /netmeter-teardown
 ```
 
-Restores your most recent settings.json backup (the one made just before
-the last `netmeter-setup` run). The command also saves your current state
-before restoring, so you can redo if needed.
+This restores `settings.json` from the most recent backup
+`netmeter-setup` made, removing the `statusLine` block. You must do this
+**before** uninstalling the plugin — once the plugin is gone, so is the
+`/netmeter-teardown` command.
 
-You can list the available backups without restoring:
+If you used the manual paste (Option B above) instead of `/netmeter-setup`,
+edit `~/.claude/settings.json` and remove the `statusLine` block yourself.
 
-```
-/netmeter-teardown --list
-```
-
-### If you used Option B
-
-Open `~/.claude/settings.json` in your editor and remove the `statusLine`
-block you pasted. Save the file and restart Claude Code.
-
-### Full plugin uninstall
+### 2. Uninstall the plugin
 
 ```
 /plugin uninstall netmeter@toolbelt
+```
+
+### 3. Remove the marketplace (optional)
+
+Only if you don't plan to reinstall, or you have no other plugins from the
+`toolbelt` marketplace:
+
+```
 /plugin marketplace remove toolbelt
 ```
 
-(Then remove the `statusLine` block from your settings via Option B's
-manual edit, or use `/netmeter-teardown` if you used the setup script.)
-
-Optional cleanup:
+### 4. Optional cleanup
 
 ```
 rm -rf ~/.claude/plugins/data/netmeter
 ```
 
+This removes per-session state files and logs. Not required for uninstall;
+they're inert and small.
+
+---
+
+## Recovery — if something goes wrong
+
+| Symptom | Fix |
+|---|---|
+| Statusline appears empty after install | Restart Claude Code one more time. SessionStart hooks can race the marketplace fetch on the very first install. |
+| `/netmeter-setup` says "Unknown command" | The plugin was installed in the current session but slash commands only register at session start. Restart Claude Code. |
+| You see a different statusLine and don't want to lose it | `/netmeter-setup` refuses to overwrite without `--force`. Your existing config is safe. To opt in: `/netmeter-setup --force` (it backs up your old one). |
+| `/netmeter-setup` says "already configured" but you don't see the number | The daemon may not have started this session. Restart Claude Code. |
+| You want your old settings back | `/netmeter-teardown` (if the plugin is still installed) or manually restore from `~/.claude/settings.json.bak.netmeter-<timestamp>`. |
+
 ---
 
 ## What you'll see
 
-Default format — a single, friendly total:
+Default — a single, friendly total:
 
 ```
                                                           16.4 MB used
@@ -196,9 +207,9 @@ Example block:
 
 ## Try it
 
-Ask Claude to download something networky:
+Ask Claude to download something:
 
-> Download 30 MB with `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
+> Run: `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
 
 Watch `0 B used` climb to roughly `28 MB used` over ~10 seconds.
 
@@ -212,8 +223,8 @@ Watch `0 B used` climb to roughly `28 MB used` over ~10 seconds.
   PID in the claude process tree (refreshed every 2 s).
 - It writes a per-session JSON state file at
   `~/.claude/plugins/data/netmeter/<session_id>.json` atomically every second.
-- The statusline command just reads that file each render — no `nettop`
-  shell-out per render, so it's fast (~40 ms).
+- The statusline command reads that file each render — no `nettop`
+  shell-out per render, so it stays fast (~40 ms).
 - The daemon self-terminates when the claude PID disappears.
 
 No sudo. No external services. No telemetry.
@@ -236,6 +247,11 @@ No sudo. No external services. No telemetry.
   `nettop`'s 1-second sample window cannot resolve.
 - **Per session only** — no daily/lifetime totals or per-host breakdowns
   in v1.
+- One-time manual setup of the `statusLine` block is required because
+  Claude Code does not currently support `statusLine` in plugin-shipped
+  defaults (only `agent` and `subagentStatusLine` are honored). The
+  `/netmeter-setup` command exists to make this one click instead of a
+  manual edit.
 
 ---
 
