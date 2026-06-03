@@ -92,7 +92,7 @@ def test_format_total(tmp_path):
                         env_overrides={"NETMETER_FORMAT": "total"})
     assert rc == 0
     assert "↓" not in out
-    assert out == "16.0 MB"
+    assert out == "16.0 MB  │  0.0 Mbps"
 
 def test_format_verbose(tmp_path):
     (tmp_path / "abc.json").write_text(json.dumps({
@@ -144,7 +144,7 @@ def test_right_align_pads_to_terminal_width(tmp_path):
                        input=json.dumps({"session_id": "abc", "terminal_width": 80}),
                        capture_output=True, text=True, env=env, timeout=5)
     raw = p.stdout.rstrip("\n")
-    assert raw.endswith("1 KB used"), f"got: {raw!r}"
+    assert raw.endswith("0.0 Mbps"), f"got: {raw!r}"
     assert raw.startswith("   "), f"expected leading spaces, got: {raw!r}"
     assert len(raw) == 80, f"expected width 80, got {len(raw)}: {raw!r}"
 
@@ -155,7 +155,7 @@ def test_left_align_explicit_no_padding(tmp_path):
                        input=json.dumps({"session_id": "abc", "terminal_width": 80}),
                        capture_output=True, text=True, env=env, timeout=5)
     raw = p.stdout.rstrip("\n")
-    assert raw == "net  1 KB used", f"got: {raw!r}"
+    assert raw == "net  1 KB used  │  0.0 Mbps", f"got: {raw!r}"
 
 def test_center_align(tmp_path):
     _make_state(tmp_path, 1024, 512)
@@ -164,7 +164,7 @@ def test_center_align(tmp_path):
                        input=json.dumps({"session_id": "abc", "terminal_width": 60}),
                        capture_output=True, text=True, env=env, timeout=5)
     raw = p.stdout.rstrip("\n")
-    visible = "net  1 KB used"
+    visible = "net  1 KB used  │  0.0 Mbps"
     expected_pad = (60 - len(visible)) // 2
     assert raw == " " * expected_pad + visible, f"got: {raw!r}"
 
@@ -212,4 +212,64 @@ def test_color_off_strips_ansi(tmp_path):
                         env_overrides={"NETMETER_ALIGN": "left"})
     assert rc == 0
     assert "\x1b[" not in out
-    assert out == "net  1 KB used"
+    assert out == "net  1 KB used  │  0.0 Mbps"
+
+
+def _make_state_with_rate(tmp_path, b_in, b_out, rate_bps):
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": b_in, "bytes_out": b_out,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+        "rate_bytes_per_sec": rate_bps,
+    }))
+
+def test_compact_shows_mbps_segment(tmp_path):
+    """Default compact mode: 'net  X used  │  Y.Y Mbps'."""
+    # 525000 bytes/sec = 4.2 Mbps (×8 / 1_000_000)
+    _make_state_with_rate(tmp_path, 1024, 0, 525000.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_ALIGN": "left"})
+    assert rc == 0
+    assert "│" in out
+    assert "4.2 Mbps" in out
+
+def test_idle_shows_zero_mbps(tmp_path):
+    _make_state_with_rate(tmp_path, 0, 0, 0.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_ALIGN": "left"})
+    assert rc == 0
+    assert "0.0 Mbps" in out
+
+def test_total_mode_shows_mbps(tmp_path):
+    _make_state_with_rate(tmp_path, 1024, 0, 525000.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_FORMAT": "total", "NETMETER_ALIGN": "left"})
+    assert rc == 0
+    assert "│" in out and "4.2 Mbps" in out
+
+def test_split_mode_shows_mbps(tmp_path):
+    _make_state_with_rate(tmp_path, 1024, 512, 525000.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_FORMAT": "split", "NETMETER_ALIGN": "left"})
+    assert rc == 0
+    assert "↓" in out and "↑" in out
+    assert "│" in out and "4.2 Mbps" in out
+
+def test_verbose_mode_includes_mbps_inside_parens(tmp_path):
+    _make_state_with_rate(tmp_path, 1024, 512, 525000.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_FORMAT": "verbose", "NETMETER_ALIGN": "left"})
+    assert rc == 0
+    # verbose: 'net: X (↓Y ↑Z, R.R Mbps)' — Mbps is inside the parens, no '│'.
+    assert "│" not in out
+    assert "(" in out and ")" in out
+    assert "4.2 Mbps" in out
+
+def test_color_off_strips_ansi_includes_mbps(tmp_path):
+    _make_state_with_rate(tmp_path, 1024, 0, 525000.0)
+    out, rc = run_render(tmp_path, json.dumps({"session_id": "abc"}),
+                        env_overrides={"NETMETER_ALIGN": "left"})
+    # run_render already sets NETMETER_COLOR=0
+    assert rc == 0
+    assert "\x1b[" not in out
+    assert out == "net  1 KB used  │  4.2 Mbps"

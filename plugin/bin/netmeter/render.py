@@ -22,6 +22,9 @@ YELLOW = "\033[33m"
 RED    = "\033[31m"
 RESET  = "\033[0m"
 
+MBPS_BITS_PER_BYTE = 8
+MBPS_DIVISOR = 1_000_000  # SI megabits (matches what ISPs and speedtests use)
+
 
 def _colour_enabled() -> bool:
     return os.environ.get("NETMETER_COLOR", "1") != "0"
@@ -62,31 +65,42 @@ def is_stale(updated_at: str, threshold_sec: int) -> bool:
     return age > threshold_sec
 
 
-def format_line(b_in: int, b_out: int, mode: str) -> str:
+def _format_mbps(rate_bytes_per_sec: float) -> str:
+    """Convert bytes/sec to a one-decimal Mbps string, e.g. '4.2 Mbps'."""
+    mbps = max(rate_bytes_per_sec, 0.0) * MBPS_BITS_PER_BYTE / MBPS_DIVISOR
+    return f"{mbps:.1f} Mbps"
+
+
+def format_line(b_in: int, b_out: int, mode: str, rate_bps: float = 0.0) -> str:
     h_in    = bytes_to_human(b_in)
     h_out   = bytes_to_human(b_out)
     h_total = bytes_to_human(b_in + b_out)
+    mbps    = _format_mbps(rate_bps)
+
+    sep        = _wrap("│", DIM)
+    rate_styled = _wrap(mbps, GREEN)
 
     if mode == "total":
-        return _wrap(h_total, _value_colour(b_in + b_out))
+        return f"{_wrap(h_total, _value_colour(b_in + b_out))}  {sep}  {rate_styled}"
 
     if mode == "split":
         return (
             f"{_wrap('↓', CYAN)} {_wrap(h_in,  _value_colour(b_in))}  "
             f"{_wrap('↑', CYAN)} {_wrap(h_out, _value_colour(b_out))}"
+            f"  {sep}  {rate_styled}"
         )
 
     if mode == "verbose":
         return (
             f"{_wrap('net:', CYAN)} {_wrap(h_total, _value_colour(b_in + b_out))} "
-            f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out})"
+            f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out}, {rate_styled})"
         )
 
     # default 'compact'
     return (
         f"{_wrap('net', CYAN)}  "
         f"{_wrap(h_total, _value_colour(b_in + b_out))} "
-        f"{_wrap('used', DIM)}"
+        f"{_wrap('used', DIM)}  {sep}  {rate_styled}"
     )
 
 
@@ -144,7 +158,7 @@ def main() -> int:
     except ValueError:
         threshold = DEFAULT_STALE_SEC
     mode = os.environ.get("NETMETER_FORMAT", "compact")
-    line = format_line(state.bytes_in, state.bytes_out, mode)
+    line = format_line(state.bytes_in, state.bytes_out, mode, state.rate_bytes_per_sec)
     if is_stale(state.updated_at, threshold):
         line = line + " " + _wrap("⚠", YELLOW)
     align = os.environ.get("NETMETER_ALIGN", DEFAULT_ALIGN)
