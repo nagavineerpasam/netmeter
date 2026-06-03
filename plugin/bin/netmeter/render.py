@@ -17,13 +17,13 @@ ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 #   tier where yellow/red call attention), dim grey for the trailing word.
 CYAN   = "\033[36m"
 DIM    = "\033[2m"
+GREEN  = "\033[32m"
 YELLOW = "\033[33m"
 RED    = "\033[31m"
 RESET  = "\033[0m"
 
-# Soft thresholds (in bytes) at which the byte value switches colour. The
-# default makes everything under 50 MB look unobtrusive (uncoloured) and
-# only paints attention onto sessions that have moved real volume.
+# Traffic-light tiers on the byte value:
+#   green up to TIER_YELLOW, yellow up to TIER_RED, red above.
 TIER_YELLOW = 50  * 1024 * 1024     # 50 MB
 TIER_RED    = 500 * 1024 * 1024     # 500 MB
 
@@ -43,7 +43,7 @@ def _tier_colour(n: int) -> str:
         return RED
     if n >= TIER_YELLOW:
         return YELLOW
-    return ""
+    return GREEN
 
 
 def state_dir() -> Path:

@@ -190,6 +190,19 @@ def test_colors_present_when_enabled(tmp_path):
     assert "\x1b[2m" in raw       # dim for 'used'
     assert "\x1b[0m" in raw       # at least one reset
 
+def test_tier_green_for_low_usage(tmp_path):
+    """Anything below 50 MB is green — the friendly default."""
+    _make_state(tmp_path, 30 * 1024 * 1024, 0)   # 30 MB total
+    p = subprocess.run([str(ENTRY)],
+                       input=json.dumps({"session_id": "abc"}),
+                       capture_output=True, text=True,
+                       env=_color_env(tmp_path, NETMETER_ALIGN="left"),
+                       timeout=5)
+    raw = p.stdout.rstrip("\n")
+    assert "\x1b[32m" in raw      # green tier
+    assert "\x1b[33m" not in raw  # not yellow
+    assert "\x1b[31m" not in raw  # not red
+
 def test_tier_yellow_for_50mb(tmp_path):
     _make_state(tmp_path, 60 * 1024 * 1024, 0)   # 60 MB total
     p = subprocess.run([str(ENTRY)],
