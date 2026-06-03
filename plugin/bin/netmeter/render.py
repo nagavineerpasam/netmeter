@@ -87,7 +87,21 @@ def _mascot_for(mbps: float) -> str:
     return _MASCOT_TIERS[-1][1]
 
 def _mascot_enabled() -> bool:
-    return os.environ.get("NETMETER_MASCOT", "0") == "1"
+    """Opt-in via either the env var or a marker file.
+
+    The env-var path works in any shell. The marker-file path exists because
+    Claude Code does not pass statusLine.env from settings.json through to
+    the subprocess, so users couldn't otherwise enable this from the plugin's
+    normal config surface. `touch ~/.claude/plugins/data/netmeter/mascot`
+    is the recommended one-shot toggle.
+    """
+    if os.environ.get("NETMETER_MASCOT", "0") == "1":
+        return True
+    marker = Path(os.environ.get(
+        "NETMETER_STATE_DIR",
+        Path.home() / ".claude" / "plugins" / "data" / "netmeter"
+    )) / "mascot"
+    return marker.exists()
 
 
 def format_line(b_in: int, b_out: int, mode: str, rate_bps: float = 0.0) -> str:

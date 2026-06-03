@@ -363,3 +363,22 @@ def test_mascot_verbose_emoji_after_closing_paren(tmp_path):
     rabbit_pos = out.find("🐇")
     assert paren_pos != -1 and rabbit_pos != -1
     assert rabbit_pos > paren_pos
+
+def test_mascot_enabled_via_marker_file(tmp_path):
+    """A 'mascot' marker file in the state dir opts in even without the env var."""
+    (tmp_path / "abc.json").write_text(json.dumps({
+        "session_id": "abc", "claude_pid": 1,
+        "bytes_in": 0, "bytes_out": 0,
+        "started_at": "t", "updated_at": "9999-01-01T00:00:00Z",
+        "rate_bytes_per_sec": 500000.0,  # 4 Mbps → rabbit
+    }))
+    (tmp_path / "mascot").touch()
+    # Note: NO NETMETER_MASCOT set, only the file
+    env = {**os.environ, "NETMETER_STATE_DIR": str(tmp_path),
+           "NETMETER_COLOR": "0", "NETMETER_ALIGN": "left"}
+    env.pop("NETMETER_MASCOT", None)
+    p = subprocess.run([str(ENTRY)],
+                       input=json.dumps({"session_id": "abc"}),
+                       capture_output=True, text=True, env=env, timeout=5)
+    raw = p.stdout.rstrip("\n")
+    assert "🐇" in raw, f"expected rabbit via marker file, got: {raw!r}"
