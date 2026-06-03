@@ -3,7 +3,7 @@
 **See how much internet data your Claude Code session is using — right in the statusline.**
 
 ```
-                                                                       16.4 MB used
+Opus 4.7  [████████░░░░░░░░░░░░] 42% used                              net  16.4 MB used
 ```
 
 netmeter is a Claude Code plugin (macOS). It counts every byte the `claude`
@@ -11,164 +11,84 @@ process and its children send and receive — API calls, WebFetch, Bash-spawned
 `curl`, MCP servers, `git push`, package downloads. The counter resets at
 each new session, so you always see *this session's* usage.
 
+If you already have a statusline (model + context bar, git status, etc.),
+netmeter coexists: your existing line stays as the top row, netmeter shows
+on the row below it. You don't have to edit anything by hand.
+
 ---
 
-## Install
+## Install (three commands, no restart)
 
-Three commands inside Claude Code, plus one restart in the middle.
-
-### 1. Add the marketplace
+In any Claude Code window:
 
 ```
 /plugin marketplace add nagavineerpasam/netmeter
-```
-
-### 2. Install the plugin
-
-```
 /plugin install netmeter@toolbelt
+/reload-skills
+/netmeter-setup
 ```
 
-### 3. Restart Claude Code
+That's it.
 
-`/exit`, then run `claude` again. This restart is **required**, because:
+- `/plugin marketplace add` registers this repo as a plugin source.
+- `/plugin install` fetches the plugin from GitHub.
+- `/reload-skills` makes the `/netmeter-setup` slash command available
+  immediately, without restarting Claude Code.
+- `/netmeter-setup` writes the statusline config to your `~/.claude/settings.json`
+  (with a backup), composes with any existing statusline you had, and lets
+  Claude Code auto-reload. The daemon lazy-spawns from the first render.
 
-- New plugin slash commands (like `/netmeter-setup` below) only register at
-  session start ([upstream issue #37862](https://github.com/anthropics/claude-code/issues/37862)).
-- On first-install from a GitHub marketplace, the SessionStart hook can race
-  the async marketplace fetch and miss firing
-  ([upstream issue #10997](https://github.com/anthropics/claude-code/issues/10997)).
-  A restart guarantees the daemon starts cleanly.
+Within a few seconds of your next message, the statusline shows `net  0 B used`
+on the right (or stacked under your existing line if you have one).
 
-### 4. Configure the statusline
-
-After the restart, run:
-
-```
-/netmeter-setup --dry-run     # preview, writes nothing
-/netmeter-setup               # apply
-```
-
-That's it. Whether or not you already have a statusline configured,
-`/netmeter-setup` does the right thing:
-
-- **No existing statusline?** It installs netmeter as your statusline.
-- **You already have one** (model + context bar, git status, anything)?
-  It composes: your existing statusline stays as the top row, and
-  netmeter shows on the row below it. **You don't have to merge scripts
-  by hand or lose your existing UI.**
-
-Claude Code auto-reloads `~/.claude/settings.json`, so your next message
-refreshes the statusline — no second restart required.
-
-The command is idempotent (re-run is a no-op), writes a timestamped backup
-of `settings.json` before any change, and writes atomically (`settings.json`
-is never half-written). Pass `--replace` if you *want* to throw away your
-existing statusline and use netmeter only.
-
-#### Option B — manual paste
-
-If you'd rather not run a script, open `~/.claude/settings.json` and merge
-in this block:
-
-```json
-{
-  "statusLine": {
-    "type": "command",
-    "command": "~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/statusline.sh",
-    "padding": 0,
-    "refreshInterval": 5
-  }
-}
-```
-
-Save the file. No restart needed — Claude Code reloads settings automatically
-([per the official docs](https://code.claude.com/docs/en/statusline)).
-
-#### Option C — terminal script
-
-If you'd rather run the script from your shell:
-
-```
-bash ~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/bin/netmeter-setup --dry-run
-bash ~/.claude/plugins/cache/toolbelt/netmeter/0.1.0/bin/netmeter-setup
-```
-
-Same script as Option A, just invoked outside Claude Code.
+> **Want to preview before applying?** `/netmeter-setup --dry-run` prints what
+> it would change to `settings.json` without writing.
+>
+> **Want to replace your existing statusline instead of stacking under it?**
+> `/netmeter-setup --replace`.
 
 ---
 
-## Uninstall
-
-**Order matters.** Run these in sequence:
-
-### 1. Restore your settings first
+## Uninstall (two commands)
 
 ```
 /netmeter-teardown
-```
-
-This restores `settings.json` from the most recent backup
-`netmeter-setup` made, removing the `statusLine` block. You must do this
-**before** uninstalling the plugin — once the plugin is gone, so is the
-`/netmeter-teardown` command.
-
-If you used the manual paste (Option B above) instead of `/netmeter-setup`,
-edit `~/.claude/settings.json` and remove the `statusLine` block yourself.
-
-### 2. Uninstall the plugin
-
-```
 /plugin uninstall netmeter@toolbelt
 ```
 
-### 3. Remove the marketplace (optional)
+- `/netmeter-teardown` restores your `settings.json` from the most recent
+  backup `netmeter-setup` made (your original statusline returns exactly as
+  it was), and removes the compose pointer.
+- `/plugin uninstall` removes the plugin itself.
 
-Only if you don't plan to reinstall, or you have no other plugins from the
-`toolbelt` marketplace:
-
-```
-/plugin marketplace remove toolbelt
-```
-
-### 4. Optional cleanup
+Optional cleanup if you want every trace gone:
 
 ```
-rm -rf ~/.claude/plugins/data/netmeter
+/plugin marketplace remove toolbelt    # only if no other plugins use it
+rm -rf ~/.claude/plugins/data/netmeter # session state + logs
 ```
-
-This removes per-session state files and logs. Not required for uninstall;
-they're inert and small.
-
----
-
-## Recovery — if something goes wrong
-
-| Symptom | Fix |
-|---|---|
-| Statusline appears empty after install | Restart Claude Code one more time. SessionStart hooks can race the marketplace fetch on the very first install. |
-| `/netmeter-setup` says "Unknown command" | The plugin was installed in the current session but slash commands only register at session start. Restart Claude Code. |
-| You already had a statusline and don't want to lose it | You don't have to. `/netmeter-setup` composes by default — your existing statusline shows on top, netmeter on the row below. Pass `--replace` only if you want netmeter to take over the whole thing. |
-| Your existing statusline shows but no netmeter row appears below | The daemon may not have started this session yet. Restart Claude Code. |
-| You want your old settings back | `/netmeter-teardown` (if the plugin is still installed) or manually restore from `~/.claude/settings.json.bak.netmeter-<timestamp>`. |
-| The statusline line wraps or gets cut off | Set `COLUMNS` in your terminal, or upgrade to Claude Code v2.1.153+ which provides terminal width to statusline scripts. |
 
 ---
 
 ## What you'll see
 
-Default — a single, friendly total:
+Default format — a single, friendly total with subtle colour for size:
 
 ```
-                                                          16.4 MB used
+net  16.4 MB used
 ```
 
-Other formats via the `NETMETER_FORMAT` environment variable (set under
-`statusLine.env` in your settings):
+- `net` in cyan (matches the colour of model labels in Claude Code).
+- Value in your terminal's default colour up to 50 MB, **yellow** from 50 MB
+  to 500 MB, **red** above 500 MB.
+- `used` in dim gray.
+
+Other formats via `NETMETER_FORMAT` (set under `statusLine.env` in
+`~/.claude/settings.json`):
 
 | `NETMETER_FORMAT` | Looks like |
 |---|---|
-| `compact` *(default)* | `16.4 MB used` |
+| `compact` *(default)* | `net  16.4 MB used` |
 | `total` | `16.4 MB` |
 | `split` | `↓ 12.3 MB  ↑ 4.1 MB` |
 | `verbose` | `net: 16.4 MB (↓12.3 MB ↑4.1 MB)` |
@@ -187,6 +107,7 @@ All optional. Set under `statusLine.env` in `~/.claude/settings.json`.
 |---|---|---|
 | `NETMETER_FORMAT` | `compact` | `compact` / `total` / `split` / `verbose` |
 | `NETMETER_ALIGN` | `right` | `right` / `center` / `left` |
+| `NETMETER_COLOR` | `1` | Set to `0` to disable ANSI styling |
 | `NETMETER_STALE_THRESHOLD_SEC` | `10` | Append `⚠` if state is older than this |
 
 Example block:
@@ -208,26 +129,41 @@ Example block:
 
 ---
 
+## Recovery — when something looks off
+
+| Symptom | Fix |
+|---|---|
+| `/netmeter-setup` says "Unknown command" | You haven't run `/reload-skills` since installing. Run it, then try again. |
+| Statusline empty after the first message | The daemon is still spawning. Send one more message — it appears within ~1 second. |
+| You see `net X MB used` but your previous statusline disappeared | Composition wasn't applied. Run `/netmeter-teardown` (restores your old statusline) and then `/netmeter-setup` again. |
+| You want netmeter removed but your previous statusline back | `/netmeter-teardown`. |
+| You want netmeter only, drop the row above it | `rm ~/.claude/plugins/data/netmeter/compose_with` — netmeter's wrapper stops calling the inner line. |
+
+---
+
 ## Try it
 
 Ask Claude to download something:
 
 > Run: `curl -sSL --limit-rate 3M https://speed.cloudflare.com/__down?bytes=30000000 -o /dev/null`
 
-Watch `0 B used` climb to roughly `28 MB used` over ~10 seconds.
+Watch `net  0 B used` climb to roughly `net  28 MB used` over ~10 seconds. Past
+50 MB the value turns yellow; past 500 MB it turns red.
 
 ---
 
 ## How it works
 
-- The `SessionStart` hook spawns a small Python daemon scoped to the
-  current Claude Code session.
+- A `SessionStart` hook spawns a small Python daemon when Claude Code
+  starts. If the hook misses (e.g., first-install marketplace fetch race),
+  the statusline script **lazy-spawns** the daemon on the first render.
 - The daemon streams `nettop -P -d` and accumulates byte deltas for every
   PID in the claude process tree (refreshed every 2 s).
 - It writes a per-session JSON state file at
-  `~/.claude/plugins/data/netmeter/<session_id>.json` atomically every second.
-- The statusline command reads that file each render — no `nettop`
-  shell-out per render, so it stays fast (~40 ms).
+  `~/.claude/plugins/data/netmeter/<session_id>.json` atomically every
+  second.
+- The statusline command reads that file each render — fast (~40 ms) and
+  doesn't shell out to `nettop` per render.
 - The daemon self-terminates when the claude PID disappears.
 
 No sudo. No external services. No telemetry.
@@ -238,6 +174,8 @@ No sudo. No external services. No telemetry.
 
 - macOS (uses the preinstalled `nettop` tool).
 - Python 3.9+ (preinstalled on macOS).
+- Claude Code v2.1.140+ recommended (older versions may need `/exit` and
+  reopen instead of `/reload-skills`).
 - `jq` is optional; the hook falls back to `python3` if it's missing.
 
 ---
@@ -250,11 +188,6 @@ No sudo. No external services. No telemetry.
   `nettop`'s 1-second sample window cannot resolve.
 - **Per session only** — no daily/lifetime totals or per-host breakdowns
   in v1.
-- One-time manual setup of the `statusLine` block is required because
-  Claude Code does not currently support `statusLine` in plugin-shipped
-  defaults (only `agent` and `subagentStatusLine` are honored). The
-  `/netmeter-setup` command exists to make this one click instead of a
-  manual edit.
 
 ---
 
