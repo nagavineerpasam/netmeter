@@ -13,19 +13,14 @@ FALLBACK_WIDTH = 120
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 # Colours intentionally match the style of the Claude Code model+context bar:
-#   cyan for labels, terminal default for the bytes value (unless in a high
-#   tier where yellow/red call attention), dim grey for the trailing word.
+#   cyan label, green value, dim grey suffix. Yellow is reserved for the
+#   stale-marker, red for the error label.
 CYAN   = "\033[36m"
 DIM    = "\033[2m"
 GREEN  = "\033[32m"
 YELLOW = "\033[33m"
 RED    = "\033[31m"
 RESET  = "\033[0m"
-
-# Traffic-light tiers on the byte value:
-#   green up to TIER_YELLOW, yellow up to TIER_RED, red above.
-TIER_YELLOW = 50  * 1024 * 1024     # 50 MB
-TIER_RED    = 500 * 1024 * 1024     # 500 MB
 
 
 def _colour_enabled() -> bool:
@@ -38,11 +33,10 @@ def _wrap(text: str, code: str) -> str:
     return f"{code}{text}{RESET}"
 
 
-def _tier_colour(n: int) -> str:
-    if n >= TIER_RED:
-        return RED
-    if n >= TIER_YELLOW:
-        return YELLOW
+def _value_colour(_n: int) -> str:
+    """Byte values render in green. Single colour by design — netmeter
+    measures usage, not a limit, so a traffic-light scheme would invent
+    thresholds that don't exist for every user."""
     return GREEN
 
 
@@ -74,24 +68,24 @@ def format_line(b_in: int, b_out: int, mode: str) -> str:
     h_total = bytes_to_human(b_in + b_out)
 
     if mode == "total":
-        return _wrap(h_total, _tier_colour(b_in + b_out))
+        return _wrap(h_total, _value_colour(b_in + b_out))
 
     if mode == "split":
         return (
-            f"{_wrap('↓', CYAN)} {_wrap(h_in,  _tier_colour(b_in))}  "
-            f"{_wrap('↑', CYAN)} {_wrap(h_out, _tier_colour(b_out))}"
+            f"{_wrap('↓', CYAN)} {_wrap(h_in,  _value_colour(b_in))}  "
+            f"{_wrap('↑', CYAN)} {_wrap(h_out, _value_colour(b_out))}"
         )
 
     if mode == "verbose":
         return (
-            f"{_wrap('net:', CYAN)} {_wrap(h_total, _tier_colour(b_in + b_out))} "
+            f"{_wrap('net:', CYAN)} {_wrap(h_total, _value_colour(b_in + b_out))} "
             f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out})"
         )
 
     # default 'compact'
     return (
         f"{_wrap('net', CYAN)}  "
-        f"{_wrap(h_total, _tier_colour(b_in + b_out))} "
+        f"{_wrap(h_total, _value_colour(b_in + b_out))} "
         f"{_wrap('used', DIM)}"
     )
 

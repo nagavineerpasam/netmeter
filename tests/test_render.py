@@ -190,39 +190,21 @@ def test_colors_present_when_enabled(tmp_path):
     assert "\x1b[2m" in raw       # dim for 'used'
     assert "\x1b[0m" in raw       # at least one reset
 
-def test_tier_green_for_low_usage(tmp_path):
-    """Anything below 50 MB is green — the friendly default."""
-    _make_state(tmp_path, 30 * 1024 * 1024, 0)   # 30 MB total
-    p = subprocess.run([str(ENTRY)],
-                       input=json.dumps({"session_id": "abc"}),
-                       capture_output=True, text=True,
-                       env=_color_env(tmp_path, NETMETER_ALIGN="left"),
-                       timeout=5)
-    raw = p.stdout.rstrip("\n")
-    assert "\x1b[32m" in raw      # green tier
-    assert "\x1b[33m" not in raw  # not yellow
-    assert "\x1b[31m" not in raw  # not red
-
-def test_tier_yellow_for_50mb(tmp_path):
-    _make_state(tmp_path, 60 * 1024 * 1024, 0)   # 60 MB total
-    p = subprocess.run([str(ENTRY)],
-                       input=json.dumps({"session_id": "abc"}),
-                       capture_output=True, text=True,
-                       env=_color_env(tmp_path, NETMETER_ALIGN="left"),
-                       timeout=5)
-    raw = p.stdout.rstrip("\n")
-    assert "\x1b[33m" in raw      # yellow tier
-    assert "\x1b[31m" not in raw  # not red
-
-def test_tier_red_for_500mb(tmp_path):
-    _make_state(tmp_path, 600 * 1024 * 1024, 0)  # 600 MB total
-    p = subprocess.run([str(ENTRY)],
-                       input=json.dumps({"session_id": "abc"}),
-                       capture_output=True, text=True,
-                       env=_color_env(tmp_path, NETMETER_ALIGN="left"),
-                       timeout=5)
-    raw = p.stdout.rstrip("\n")
-    assert "\x1b[31m" in raw      # red tier
+def test_byte_value_is_green(tmp_path):
+    """The byte value renders in green regardless of magnitude — single colour by design."""
+    for total in (1024, 30 * 1024 * 1024, 600 * 1024 * 1024):
+        _make_state(tmp_path, total, 0)
+        p = subprocess.run([str(ENTRY)],
+                           input=json.dumps({"session_id": "abc"}),
+                           capture_output=True, text=True,
+                           env=_color_env(tmp_path, NETMETER_ALIGN="left"),
+                           timeout=5)
+        raw = p.stdout.rstrip("\n")
+        assert "\x1b[32m" in raw, f"expected green for {total} bytes, got: {raw!r}"
+        # Stale ⚠ is yellow and error label is red — neither should appear in
+        # a fresh, non-error state file.
+        assert "\x1b[33m" not in raw, f"unexpected yellow for {total} bytes"
+        assert "\x1b[31m" not in raw, f"unexpected red for {total} bytes"
 
 def test_color_off_strips_ansi(tmp_path):
     _make_state(tmp_path, 1024, 512)
