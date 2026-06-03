@@ -111,11 +111,32 @@ All optional. Set under `statusLine.env` in `~/.claude/settings.json`.
 | `NETMETER_ALIGN` | `right` | `right` / `center` / `left` |
 | `NETMETER_COLOR` | `1` | Set to `0` to disable ANSI styling |
 | `NETMETER_STALE_THRESHOLD_SEC` | `10` | Append `⚠` if state is older than this |
-| `NETMETER_MASCOT` | `0` | Set to `1` to append a tier emoji (🐌 → 🐢 → 🐇 → 🚀 → 🚀🚀) based on current Mbps |
+| `NETMETER_MASCOT` | `0` | Set to `1` to append a tier emoji (also enableable via a marker file — see below) |
 
-With `NETMETER_MASCOT=1` the statusline ends with an animal-kingdom speed tier:
-🐌 under 0.1 Mbps, 🐢 under 1, 🐇 under 10, 🚀 under 50, 🚀🚀 at 50+ Mbps.
-Pure cosmetic; opt-in.
+### Optional mascot
+
+The statusline can end with an animal-kingdom speed tier:
+
+| Mbps | Mascot |
+|---|---|
+| `< 0.1` | 🐌 |
+| `< 1` | 🐢 |
+| `< 10` | 🐇 |
+| `< 50` | 🚀 |
+| `≥ 50` | 🚀🚀 |
+
+To enable, **create an empty marker file** in the netmeter data dir:
+
+```
+touch ~/.claude/plugins/data/netmeter/mascot
+```
+
+To disable: `rm ~/.claude/plugins/data/netmeter/mascot`.
+
+Why a file instead of `statusLine.env`? Claude Code does not currently
+pass `statusLine.env` to the statusline subprocess, so the `NETMETER_MASCOT=1`
+env-var only takes effect when set in your shell (not through the plugin
+config). The marker file is the practical opt-in. Pure cosmetic; opt-in only.
 
 Example block:
 
