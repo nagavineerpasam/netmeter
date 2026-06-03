@@ -2,9 +2,7 @@
 
 **See how much internet data your Claude Code session is using and how fast it's moving — right in the statusline.**
 
-```
-Opus 4.7  [████████░░░░░░░░░░░░] 42% used                              net  16.4 MB used  │  4.2 Mbps
-```
+![netmeter statusline preview](assets/statusline-preview.png)
 
 netmeter is a Claude Code plugin (macOS). It counts every byte the `claude`
 process and its children send and receive — API calls, WebFetch, Bash-spawned
