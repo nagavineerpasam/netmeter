@@ -9,7 +9,7 @@
     {
       "name": "netmeter",
       "description": "Live network usage and throughput for your Claude Code session, in the statusline (macOS)",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "source": "./plugin",
       "author": {
         "name": "nagavineerpasam",
