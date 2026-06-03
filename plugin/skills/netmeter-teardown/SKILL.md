@@ -1,7 +1,7 @@
 ---
 name: netmeter-teardown
 description: Restore your settings.json from the most recent netmeter-setup backup, undoing whatever netmeter-setup changed (the original statusLine, env vars, padding all come back exactly as they were). Pass --list to see available backups without restoring.
-argument-hint: [--list]
+argument-hint: "[--list]"
 allowed-tools: [Bash]
 ---
 

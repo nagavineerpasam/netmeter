@@ -1,7 +1,7 @@
 ---
 name: netmeter-setup
 description: Configure the netmeter statusLine in your user settings. Composes safely with any existing statusLine you already have configured, so nothing is overwritten by accident. Pass --dry-run to preview, --replace to discard your existing statusline.
-argument-hint: [--dry-run] [--replace]
+argument-hint: "[--dry-run] [--replace]"
 allowed-tools: [Bash]
 ---
 
