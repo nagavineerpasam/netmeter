@@ -1,16 +1,23 @@
 #!/usr/bin/env bash
-# netmeter-setup: configure (or preview) the statusLine block in
-# ~/.claude/settings.json so the netmeter statusline actually appears.
+# netmeter-setup: configure the statusLine block in ~/.claude/settings.json
+# so the netmeter statusline appears.
 #
 # Usage:
-#   netmeter-setup            apply (with safety checks)
+#   netmeter-setup            apply (compose with existing statusline if any)
 #   netmeter-setup --dry-run  preview what would change, write nothing
-#   netmeter-setup --force    replace an existing custom statusLine
+#   netmeter-setup --replace  throw away the existing statusline (no compose)
 #   netmeter-setup --help     show this help
+#
+# Behaviour:
+#   - No existing statusLine            → install netmeter alone.
+#   - Existing statusLine                → compose: keep the user's line(s) AS
+#                                          THE FIRST ROWS and append netmeter
+#                                          on a row below. The user never has
+#                                          to merge scripts by hand.
+#   - --replace                          → discard the existing one, netmeter only.
 #
 # Safety guarantees:
 #   - Refuses to run if netmeter@toolbelt isn't installed.
-#   - Refuses to overwrite an existing non-netmeter statusLine unless --force.
 #   - Always writes a timestamped backup of settings.json before any change.
 #   - Atomic write: settings.json is never half-written.
 #   - Idempotent: re-running detects "already configured" and exits cleanly.
@@ -20,11 +27,11 @@
 set -uo pipefail
 
 DRY_RUN=0
-FORCE=0
+REPLACE=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
-    --force)   FORCE=1 ;;
+    --replace|--force) REPLACE=1 ;;
     --help|-h)
       sed -n '2,/^$/p' "$0" | sed 's/^# //; s/^#//'
       exit 0
@@ -56,7 +63,7 @@ fi
 
 # 2. Look up the actual install path (version-stable: reads what's installed now).
 INSTALL_PATH="$(python3 - <<EOF
-import json, sys
+import json
 try:
     d = json.load(open("$INSTALLED"))
     entries = d.get("plugins", {}).get("netmeter@toolbelt", [])
@@ -85,31 +92,17 @@ EOF
 
 # 4. Decide what to do.
 ACTION=""
-if [ -z "$CURRENT_CMD" ]; then
-  ACTION="add"
-elif [ "$CURRENT_CMD" = "$STATUSLINE_CMD" ]; then
-  echo "netmeter-setup: statusLine is already configured for netmeter."
+if [ "$CURRENT_CMD" = "$STATUSLINE_CMD" ]; then
+  echo "netmeter-setup: statusLine is already pointing at netmeter."
   echo "  command: $STATUSLINE_CMD"
-  echo "Nothing to do. Restart Claude Code if you don't yet see the statusline."
+  echo "Nothing to do."
   exit 0
-elif [ "$FORCE" = "1" ]; then
+elif [ -z "$CURRENT_CMD" ]; then
+  ACTION="add"
+elif [ "$REPLACE" = "1" ]; then
   ACTION="replace"
 else
-  cat >&2 <<EOF
-netmeter-setup: you already have a different statusLine configured.
-
-  current: $CURRENT_CMD
-  netmeter: $STATUSLINE_CMD
-
-Refusing to overwrite without --force.
-
-To replace it, re-run:
-  netmeter-setup --force
-
-Your existing statusLine will be backed up alongside settings.json so
-you can restore it with netmeter-teardown.
-EOF
-  exit 3
+  ACTION="compose"
 fi
 
 # 5. Dry run: report what would happen, then exit without writing.
@@ -121,15 +114,8 @@ if [ "$DRY_RUN" = "1" ]; then
   echo
   case "$ACTION" in
     add)
-      echo "  2. Add a statusLine block to $SETTINGS:"
-      ;;
-    replace)
-      echo "  2. Replace the existing statusLine in $SETTINGS"
-      echo "     (current: $CURRENT_CMD)"
-      echo "     with:"
-      ;;
-  esac
-  cat <<EOF
+      echo "  2. Add a fresh statusLine block (netmeter only):"
+      cat <<EOF
        {
          "statusLine": {
            "type": "command",
@@ -139,6 +125,46 @@ if [ "$DRY_RUN" = "1" ]; then
          }
        }
 EOF
+      ;;
+    compose)
+      echo "  2. Detected an existing statusLine — composing rather than"
+      echo "     replacing. Your existing line stays as the TOP row, netmeter"
+      echo "     appears on the row below it."
+      echo
+      echo "     current statusLine.command:"
+      echo "       $CURRENT_CMD"
+      echo
+      echo "     after netmeter-setup:"
+      cat <<EOF
+       {
+         "statusLine": {
+           "type": "command",
+           "command": "$STATUSLINE_CMD",
+           "padding": 0,
+           "refreshInterval": 5,
+           "env": {
+             "NETMETER_COMPOSE_WITH": "$CURRENT_CMD"
+           }
+         }
+       }
+EOF
+      echo
+      echo "  (Pass --replace if you'd rather throw away the existing statusline.)"
+      ;;
+    replace)
+      echo "  2. Replace the existing statusLine (current command: $CURRENT_CMD) with:"
+      cat <<EOF
+       {
+         "statusLine": {
+           "type": "command",
+           "command": "$STATUSLINE_CMD",
+           "padding": 0,
+           "refreshInterval": 5
+         }
+       }
+EOF
+      ;;
+  esac
   echo
   echo "Re-run without --dry-run to apply."
   exit 0
@@ -157,31 +183,63 @@ else
 fi
 
 # 7. Apply atomically.
-python3 - <<EOF || { echo "netmeter-setup: failed to update settings" >&2; exit 5; }
+ACTION="$ACTION" CURRENT_CMD="$CURRENT_CMD" STATUSLINE_CMD="$STATUSLINE_CMD" \
+SETTINGS="$SETTINGS" python3 - <<'PYEOF' || { echo "netmeter-setup: failed to update settings" >&2; exit 5; }
 import json, os
-path = "$SETTINGS"
+path = os.environ["SETTINGS"]
+action = os.environ["ACTION"]
+current_cmd = os.environ.get("CURRENT_CMD", "")
+new_cmd = os.environ["STATUSLINE_CMD"]
+
 try:
     with open(path) as f:
         s = json.load(f)
 except FileNotFoundError:
     s = {}
-s["statusLine"] = {
+
+existing = s.get("statusLine", {})
+new_block = {
     "type": "command",
-    "command": "$STATUSLINE_CMD",
-    "padding": 0,
-    "refreshInterval": 5,
+    "command": new_cmd,
+    "padding": existing.get("padding", 0),
+    "refreshInterval": existing.get("refreshInterval", 5),
 }
+
+env = dict(existing.get("env", {}))
+if action == "compose" and current_cmd:
+    env["NETMETER_COMPOSE_WITH"] = current_cmd
+elif action != "compose":
+    env.pop("NETMETER_COMPOSE_WITH", None)
+if env:
+    new_block["env"] = env
+
+s["statusLine"] = new_block
+
 tmp = path + ".tmp"
 with open(tmp, "w") as f:
     json.dump(s, f, indent=2)
 os.rename(tmp, path)
-EOF
+PYEOF
 
 echo "netmeter-setup: done."
 echo
 echo "  Action:   ${ACTION}"
 echo "  Command:  $STATUSLINE_CMD"
+if [ "$ACTION" = "compose" ]; then
+  echo "  Composed: $CURRENT_CMD"
+fi
 echo "  Backup:   $BACKUP"
 echo
-echo "Restart Claude Code (/exit and then run 'claude' again) to see the statusline."
+case "$ACTION" in
+  compose)
+    echo "Your previous statusline is preserved as the top row;"
+    echo "netmeter shows on the row below it. Settings reload"
+    echo "automatically — your next message refreshes the statusline."
+    ;;
+  *)
+    echo "Settings reload automatically — your next message refreshes"
+    echo "the statusline."
+    ;;
+esac
+echo
 echo "If anything looks wrong, run netmeter-teardown to restore the backup."

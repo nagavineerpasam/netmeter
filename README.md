@@ -42,27 +42,29 @@ Three commands inside Claude Code, plus one restart in the middle.
 
 ### 4. Configure the statusline
 
-After the restart, run **one** of these:
-
-#### Option A — automatic (recommended)
+After the restart, run:
 
 ```
-/netmeter-setup --dry-run
+/netmeter-setup --dry-run     # preview, writes nothing
+/netmeter-setup               # apply
 ```
 
-This shows exactly what would change in `~/.claude/settings.json`, writes
-nothing. Then run:
+That's it. Whether or not you already have a statusline configured,
+`/netmeter-setup` does the right thing:
 
-```
-/netmeter-setup
-```
+- **No existing statusline?** It installs netmeter as your statusline.
+- **You already have one** (model + context bar, git status, anything)?
+  It composes: your existing statusline stays as the top row, and
+  netmeter shows on the row below it. **You don't have to merge scripts
+  by hand or lose your existing UI.**
 
-It writes the `statusLine` block to your user settings (with a timestamped
-backup) and Claude Code auto-reloads — **no second restart needed**. Your
-next message shows `0 B used` on the statusline.
+Claude Code auto-reloads `~/.claude/settings.json`, so your next message
+refreshes the statusline — no second restart required.
 
-The command refuses to overwrite an existing custom `statusLine` unless you
-pass `--force`. It's idempotent — running twice is a no-op the second time.
+The command is idempotent (re-run is a no-op), writes a timestamped backup
+of `settings.json` before any change, and writes atomically (`settings.json`
+is never half-written). Pass `--replace` if you *want* to throw away your
+existing statusline and use netmeter only.
 
 #### Option B — manual paste
 
@@ -146,9 +148,10 @@ they're inert and small.
 |---|---|
 | Statusline appears empty after install | Restart Claude Code one more time. SessionStart hooks can race the marketplace fetch on the very first install. |
 | `/netmeter-setup` says "Unknown command" | The plugin was installed in the current session but slash commands only register at session start. Restart Claude Code. |
-| You see a different statusLine and don't want to lose it | `/netmeter-setup` refuses to overwrite without `--force`. Your existing config is safe. To opt in: `/netmeter-setup --force` (it backs up your old one). |
-| `/netmeter-setup` says "already configured" but you don't see the number | The daemon may not have started this session. Restart Claude Code. |
+| You already had a statusline and don't want to lose it | You don't have to. `/netmeter-setup` composes by default — your existing statusline shows on top, netmeter on the row below. Pass `--replace` only if you want netmeter to take over the whole thing. |
+| Your existing statusline shows but no netmeter row appears below | The daemon may not have started this session yet. Restart Claude Code. |
 | You want your old settings back | `/netmeter-teardown` (if the plugin is still installed) or manually restore from `~/.claude/settings.json.bak.netmeter-<timestamp>`. |
+| The statusline line wraps or gets cut off | Set `COLUMNS` in your terminal, or upgrade to Claude Code v2.1.153+ which provides terminal width to statusline scripts. |
 
 ---
 
