@@ -1,7 +1,7 @@
 {
   "name": "netmeter",
   "version": "0.1.1",
-  "description": "Per-session network usage in the Claude Code statusline",
+  "description": "Live network usage and throughput for your Claude Code session, in the statusline",
   "author": {
     "name": "nagavineerpasam",
     "url": "https://github.com/nagavineerpasam/netmeter"

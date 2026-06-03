@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "netmeter",
-      "description": "Per-session network usage in the Claude Code statusline (macOS)",
+      "description": "Live network usage and throughput for your Claude Code session, in the statusline (macOS)",
       "version": "0.1.1",
       "source": "./plugin",
       "author": {

@@ -1,6 +1,6 @@
 # netmeter
 
-**See how much internet data your Claude Code session is using — right in the statusline.**
+**See how much internet data your Claude Code session is using and how fast it's moving — right in the statusline.**
 
 ```
 Opus 4.7  [████████░░░░░░░░░░░░] 42% used                              net  16.4 MB used  │  4.2 Mbps
