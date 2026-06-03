@@ -1,7 +1,7 @@
 """Statusline render: read state, print one line."""
 
 from __future__ import annotations
-import datetime, json, os, shutil, sys
+import datetime, json, os, re, shutil, sys
 from pathlib import Path
 from .formatter import bytes_to_human
 from .state import read_state
@@ -10,17 +10,55 @@ DEFAULT_STALE_SEC = 10
 DEFAULT_ALIGN = "right"
 FALLBACK_WIDTH = 120
 
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+# Colours intentionally match the style of the Claude Code model+context bar:
+#   cyan for labels, terminal default for the bytes value (unless in a high
+#   tier where yellow/red call attention), dim grey for the trailing word.
+CYAN   = "\033[36m"
+DIM    = "\033[2m"
+YELLOW = "\033[33m"
+RED    = "\033[31m"
+RESET  = "\033[0m"
+
+# Soft thresholds (in bytes) at which the byte value switches colour. The
+# default makes everything under 50 MB look unobtrusive (uncoloured) and
+# only paints attention onto sessions that have moved real volume.
+TIER_YELLOW = 50  * 1024 * 1024     # 50 MB
+TIER_RED    = 500 * 1024 * 1024     # 500 MB
+
+
+def _colour_enabled() -> bool:
+    return os.environ.get("NETMETER_COLOR", "1") != "0"
+
+
+def _wrap(text: str, code: str) -> str:
+    if not code or not _colour_enabled():
+        return text
+    return f"{code}{text}{RESET}"
+
+
+def _tier_colour(n: int) -> str:
+    if n >= TIER_RED:
+        return RED
+    if n >= TIER_YELLOW:
+        return YELLOW
+    return ""
+
+
 def state_dir() -> Path:
     return Path(os.environ.get(
         "NETMETER_STATE_DIR",
         Path.home() / ".claude" / "plugins" / "data" / "netmeter"
     ))
 
+
 def parse_iso(s: str):
     try:
         return datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         return None
+
 
 def is_stale(updated_at: str, threshold_sec: int) -> bool:
     ts = parse_iso(updated_at)
@@ -29,17 +67,39 @@ def is_stale(updated_at: str, threshold_sec: int) -> bool:
     age = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds()
     return age > threshold_sec
 
+
 def format_line(b_in: int, b_out: int, mode: str) -> str:
-    h_in = bytes_to_human(b_in)
-    h_out = bytes_to_human(b_out)
-    total = bytes_to_human(b_in + b_out)
+    h_in    = bytes_to_human(b_in)
+    h_out   = bytes_to_human(b_out)
+    h_total = bytes_to_human(b_in + b_out)
+
     if mode == "total":
-        return total
+        return _wrap(h_total, _tier_colour(b_in + b_out))
+
     if mode == "split":
-        return f"↓ {h_in}  ↑ {h_out}"
+        return (
+            f"{_wrap('↓', CYAN)} {_wrap(h_in,  _tier_colour(b_in))}  "
+            f"{_wrap('↑', CYAN)} {_wrap(h_out, _tier_colour(b_out))}"
+        )
+
     if mode == "verbose":
-        return f"net: {total} (↓{h_in} ↑{h_out})"
-    return f"{total} used"
+        return (
+            f"{_wrap('net:', CYAN)} {_wrap(h_total, _tier_colour(b_in + b_out))} "
+            f"({_wrap('↓', CYAN)}{h_in} {_wrap('↑', CYAN)}{h_out})"
+        )
+
+    # default 'compact'
+    return (
+        f"{_wrap('net', CYAN)}  "
+        f"{_wrap(h_total, _tier_colour(b_in + b_out))} "
+        f"{_wrap('used', DIM)}"
+    )
+
+
+def visible_len(s: str) -> int:
+    """Length excluding ANSI colour escapes, so right-alignment hits the real edge."""
+    return len(ANSI_RE.sub("", s))
+
 
 def terminal_width(payload: dict) -> int:
     """Best-effort terminal column count: payload hint → env → shutil → fallback."""
@@ -58,15 +118,16 @@ def terminal_width(payload: dict) -> int:
         pass
     return FALLBACK_WIDTH
 
+
 def align_line(line: str, mode: str, width: int) -> str:
-    """Pad `line` left or center; right-padding adds nothing useful for a statusline."""
-    visible = len(line)
-    pad = max(0, width - visible)
+    """Pad based on visible width (excluding ANSI escapes)."""
+    pad = max(0, width - visible_len(line))
     if mode == "right":
         return " " * pad + line
     if mode == "center":
         return " " * (pad // 2) + line
     return line
+
 
 def main() -> int:
     try:
@@ -81,7 +142,7 @@ def main() -> int:
     if state is None:
         return 0
     if state.error:
-        print(f"netmeter: {state.error}")
+        print(_wrap(f"netmeter: {state.error}", RED))
         return 0
 
     try:
@@ -91,12 +152,13 @@ def main() -> int:
     mode = os.environ.get("NETMETER_FORMAT", "compact")
     line = format_line(state.bytes_in, state.bytes_out, mode)
     if is_stale(state.updated_at, threshold):
-        line = line + " ⚠"
+        line = line + " " + _wrap("⚠", YELLOW)
     align = os.environ.get("NETMETER_ALIGN", DEFAULT_ALIGN)
     if align in ("right", "center"):
         line = align_line(line, align, terminal_width(payload))
     print(line)
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())
