@@ -43,3 +43,32 @@ def test_read_wrong_shape_returns_none(tmp_path):
     p = tmp_path / "wrong.json"
     p.write_text('{"only_key": "value"}')
     assert read_state(p) is None
+
+def test_rate_field_defaults_to_zero(tmp_path):
+    """A State built without specifying the rate gets 0.0."""
+    p = tmp_path / "abc.json"
+    s = State("abc", 1, 0, 0, "t", "t")
+    assert s.rate_bytes_per_sec == 0.0
+    write_state(p, s)
+    got = read_state(p)
+    assert got.rate_bytes_per_sec == 0.0
+
+def test_rate_field_round_trips(tmp_path):
+    p = tmp_path / "abc.json"
+    s = State("abc", 1, 0, 0, "t", "t")
+    s.rate_bytes_per_sec = 524288.0  # 0.5 MiB/s
+    write_state(p, s)
+    got = read_state(p)
+    assert got.rate_bytes_per_sec == 524288.0
+
+def test_old_state_file_without_rate_reads_as_zero(tmp_path):
+    """A state.json from a previous daemon version omits rate_bytes_per_sec."""
+    p = tmp_path / "old.json"
+    p.write_text(json.dumps({
+        "session_id": "old", "claude_pid": 1,
+        "bytes_in": 0, "bytes_out": 0,
+        "started_at": "t", "updated_at": "t",
+    }))
+    got = read_state(p)
+    assert got is not None
+    assert got.rate_bytes_per_sec == 0.0

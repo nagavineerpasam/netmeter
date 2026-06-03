@@ -15,6 +15,7 @@ class State:
     started_at: str
     updated_at: str
     error: Optional[str] = None
+    rate_bytes_per_sec: float = 0.0
 
 def write_state(path: Path, state: State) -> None:
     path = Path(path)
